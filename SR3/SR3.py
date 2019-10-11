@@ -157,11 +157,13 @@ def tensor_incidence(X, k=5, as_sparse=True, **kwargs):
         else:
             phi = phi.to_dense()
             Ad = kronecker(left_eye, kronecker(phi, right_eye))
-            L = torch.add(L, torch.matmul(Ad.T,Ad))   
+            L = torch.add(L, torch.matmul(Ad.T,Ad)) 
+        phis.append(phi)
+        Ads.append(Ad)
     if as_sparse:
         L = L.to_sparse()
 
-    return L, 
+    return L, phis, Ads
 
 
 class SR3(BaseEstimator):
