@@ -1,13 +1,16 @@
 import numpy as np
+from numbers import Number
 import multiprocessing
 import torch
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import TruncatedSVD
 from functools import partial
-from scipy.sparse import issparse, coo_matrix
+from scipy.sparse import issparse, coo_matrix, csr_matrix, kron
+from scipy.sparse import eye as speye
 from scipy.sparse.linalg import svds as SVDS
 from scipy.spatial.distance import pdist, squareform
-
+from .math import optimization, tensors
+from . import utils
 global __use_pytorch
 __use_pytorch = None
 
@@ -29,53 +32,26 @@ __set_pytorch_backend__(None)
 
 svd_func = TruncatedSVD
 
-## TENSOR UTILITIES ##
 
-
-def kronecker(A, B):
-    return torch.einsum("ab,cd->acbd", A, B).view(A.size(0) * B.size(0), A.size(1) * B.size(1))
-
-
-def is_sparse_tensor(X):
-    return 'sparse' in X.layout
-
-
-def coo_matrix_to_torch(coo):
-    values = coo.data
-    indices = np.vstack((coo.row, coo.col))
-
-    i = torch.LongTensor(indices)
-    v = torch.FloatTensor(values)
-    shape = coo.shape
-
-    return torch.sparse.FloatTensor(i, v, torch.Size(shape))
-
-
-def tenmat(X, rdim):
-    # return the mode-rdim matricization of input,
-    # i.e. the rows of the output are the result of flattening along
-    # mode rdim.
-    ndims = X.dim()
-    Xshape = X.shape
-    cdims = np.flatnonzero(np.arange(ndims) != rdim)
-    Y = X.permute(
-        rdim, *cdims).reshape(Xshape[rdim], np.prod(np.array(Xshape)[cdims]))
-    return Y
-
-
-def check_tensor(X, sigma=0.3):
-    if not torch.is_tensor(X):
-        try:
-            if issparse(X):
-                Y = coo_matrix_to_torch(X)
-            else:
-                Y = torch.from_numpy(X)
-                # if np.count_nonzero(X) / np.prod(X.shape) <= 0.05:
-                #Y = Y.to_sparse()
-        except:
-            raise ValueError("Your data type was uncastable to a tensor.")
-    return Y
 ## GRAPH BUILDING ##
+
+def match_and_pad_like(x, Y, criteria_func=lambda x, Y: x >= Y, fit_func=lambda z: z // 2):
+    # match x to Y by expanding it and fitting it to criteria
+    dims = Y.ndim
+    Y = np.array(Y.shape)
+    if isinstance(x, Number):
+        x = np.ones(dims) * x
+    if isinstance(x, (list, np.ndarray)):
+        if len(x) != dims:
+            z = -1e15 * np.ones(dims)
+            for x, i in zip(x, np.arange(dims)):
+                z[i] = x
+            z = np.where(z < 0, 0, z)
+        else:
+            z = x
+        z = np.rint(z).astype(int)
+        z = np.where(criteria_func(z, Y), fit_func(Y), z)
+    return z
 
 
 def exact_nearest_neighbors_graph(X, k=5, is_distance=True):
@@ -135,57 +111,54 @@ def approximate_nn_incidence(X, k=5, factor=True, factor_d=10, **kwargs):
 
 
 def tensor_incidence(X, k=5, as_sparse=True, **kwargs):
-    X = check_tensor(X)
-    L = torch.FloatTensor(np.prod(X.shape),np.prod(X.shape))
+    X = tensors.check_tensor(X)
+    k = match_and_pad_like(k, X)
+    L = csr_matrix((np.prod(X.shape), np.prod(X.shape)))
     phis = []
     Ads = []
     for mode in range(X.dim()):
-        Y = tenmat(X, mode)
-        phi, _ = approximate_nn_incidence(Y, **kwargs)
-        phi = coo_matrix_to_torch(phi)
-
-        left_n = np.prod(np.array(X.shape)[
-                         np.flatnonzero(np.arange(X.dim()) > mode)])
-        left_eye = torch.eye(int(left_n))
-        right_n = np.prod(np.array(X.shape)[
-                          np.flatnonzero(np.arange(X.dim()) < mode)])
-        right_eye = torch.eye(int(right_n))
-        if as_sparse:
-            Ad = kronecker(left_eye, kronecker(phi.to_dense(), right_eye))
-            L = torch.add(L, torch.matmul(Ad.T,Ad))
-            Ad = Ad.to_sparse()
+        if k[mode] == 0:
+            continue
         else:
-            phi = phi.to_dense()
-            Ad = kronecker(left_eye, kronecker(phi, right_eye))
-            L = torch.add(L, torch.matmul(Ad.T,Ad)) 
-        phis.append(phi)
-        Ads.append(Ad)
-    if as_sparse:
-        L = L.to_sparse()
+            Y = tensors.tenmat(X, mode)
+            phi_bak, _ = approximate_nn_incidence(Y, k=k[mode], **kwargs)
+            phi = phi_bak.tocsr()
+            #phi = coo_matrix_to_torch(phi)
+            left_n = np.prod(np.array(X.shape)[
+                             np.flatnonzero(np.arange(X.dim()) > mode)])
+            left_eye = speye(int(left_n))
+            right_n = np.prod(np.array(X.shape)[
+                              np.flatnonzero(np.arange(X.dim()) < mode)])
+            right_eye = speye(int(right_n))
+            Ad = kron(left_eye, kron(phi, right_eye))
+            L = L + Ad.T.dot(Ad)
+            phis.append(phi_bak)
+            Ads.append(Ad.tocoo())
+    return L.tocoo(), phis, Ads
 
-    return L, phis, Ads
 
+def objective_prox(x, U, V, A, nu, gammas, shrinkage_function):
+    fidelity_penalty = 1 / 2 * (x - u).pow(2).sum()
+    shrinkage_penalty = 0
+    proximal_penalty = 0
+    for mode, Ad in enumerate(A):
+        distances = tensors.vecnorm(V[mode], dim=1)
+        shrunken_distances = shrinkage_function.exact(distances)
+        shrinkage_penalty += gammas[mode] * shrunken_distances
+
+        u_reconstructed = torch.mm(Ad, U)
+        v = torch.reshape(V[mode], -1, 1)
+        proximal_penalty += (1 / (2 * nu)) * (v - u_reconstructed).pow(2).sum()
+
+    return fidelity_penalty + shrinkage_penalty + proximal_penalty
 
 class SR3(BaseEstimator):
     def __new__(solver):
         pass
 
     def __init__(self, k=None, graph_function=None):
-        if graph_function is None:
-            self.graph_function = partial(approximate_nn_graph, k=k)
-        else:
-            self.graph_function = graph_function
+        pass
 
     def fit(self, X):
         # construct a knn graph on X
         pass
-
-
-class SR3_torch(SR3):
-
-    def __init__(self):
-        try:
-            import torch
-        except:
-            raise ImportError("PyTorch is required "
-                              "for solving using the SR3_torch class")
