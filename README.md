@@ -3,11 +3,11 @@ SR3 Fusion Clustering for multimodal data
 
 ## Dependencies (right now):
 Python ~3.6
-*`pygsp`
-*`graphtools`
-*`numpy`
-*`scipy`
-*`pytorch` (no cuda required)
+* `pygsp`
+* `graphtools`
+* `numpy`
+* `scipy`
+* `pytorch` (no cuda required)
 
 ## Instructions (for now): No Julia support in this repo.
  either add the SR3 folder to your path using `sys.path.append` or open a jupyter notebook in this parent directory. Then
