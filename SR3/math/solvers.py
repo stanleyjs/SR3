@@ -9,62 +9,6 @@ from pygsp.graphs import Graph
 from pygsp.filters import Filter
 from SR3 import utils
 
-""" Linop( A ): .matvec .rmatvec( sparse vecs )
-http://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html
-http://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.lsmr.html
-"""
-
-import numpy as np
-from scipy import sparse
-from scipy.sparse.linalg import LinearOperator  # $scipy/sparse/linalg/interface.py
-
-__version__ = "2015-12-24 dec  denis + safe_sparse_dot"
-
-
-#...............................................................................
-class Linop( LinearOperator ):  # subclass ?
-    """ Aop = Linop( scipy sparse matrix A )
-        ->  Aop.matvec(x) = A dot x, x ndarray or sparse
-            Aop.rmatvec(x) = A.T dot x
-        for scipy.sparse.linalg solvers like lsmr
-    """
-
-    def __init__( self, A ):
-        self.A = A
-
-    def matvec( self, x ):
-        return safe_sparse_dot( self.A, x )
-
-    def rmatvec( self, y ):
-        return safe_sparse_dot( self.A.T, y )
-
-        # LinearOperator subclass should implement at least one of _matvec and _matmat.
-    def _matvec( self, b ):
-        raise NotImplementedError( "_matvec" )
-
-        # not _matvec only:
-        # $scipy/sparse/linalg/interface.py
-        # def matvec(self, x):
-        #     x = np.asanyarray(x)  <-- kills sparse x, should raise an error
-
-    def _rmatvec( self, b ):
-        raise NotImplementedError( "_rmatvec" )
-
-    @property
-    def shape( self ):
-        return self.A.shape
-
-
-def safe_sparse_dot( a, b ):
-    """ -> a * b or np.dot(a, b) """
-        # from sklearn
-    if sparse.issparse(a) or sparse.issparse(b):
-        try:
-            return a * b
-        except:
-            raise
-    else:
-        return np.dot(a, b)
 
 def full_lib_path(lib, path):
     os.chdir(path)
