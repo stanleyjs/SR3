@@ -11,6 +11,15 @@ from SR3 import utils
 
 
 def full_lib_path(lib, path):
+    """ Scan `path` for shared object library `lib`
+
+    Args:
+        lib (str): String shared object library name without extension
+        path (str): Path to shared object libraries with ending slash `/`
+    
+    Returns:
+        list(string): Path to valid shared object library(ies)
+    """
     os.chdir(path)
     exts = ['so', 'dll', 'dylib']
     candidates = [file for file in glob.glob(lib + '*')
@@ -18,7 +27,7 @@ def full_lib_path(lib, path):
     if len(candidates) == 0:
         return None
     elif len(candidates) == 1:
-        return path + candidates[0]
+        return [path + candidates[0]]
     else:
         return [path + candidate for candidate in candidates]
 
@@ -101,9 +110,9 @@ class PCGSolver(Solver):
             M = spla.spilu(A)
             M = spla.LinearOperator(A.shape,M.solve)
 
-            self.__solve = lambda b: spla.bicg(A,b,**kwargs)
+            self.__solve = lambda b: spla.cgs(A,b,**kwargs)
         else:
-            self.__solve = lambda b: spla.bicg(A,b,**kwargs)
+            self.__solve = lambda b: spla.cgs(A,b,**kwargs)
         self.built = True
         return self
 
@@ -176,7 +185,7 @@ class JuliaSolver(Solver):
         libpath = str.encode(full_lib_path('laplacians', path_to_library))
         # not sure what to do here yet, i think loading the wrong lib can be bad.
         if isinstance(libpath, list):
-            raise Exception("Ambiguous laplacians libraries found")
+            libpath = libpath[0]
         lib = ctypes.CDLL(libpath, ctypes.RTLD_GLOBAL)
         lib.jl_init_with_image__threading.argtypes = (
             ctypes.c_char_p, ctypes.c_char_p)

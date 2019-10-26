@@ -79,8 +79,9 @@ def tenmat(X, rdim, as_np=True, force_sparse=False):
                                                      np.prod(csize)]))
     else:
         Y = X.permute(
-            rdim, *cdims).reshape(Xshape[rdim],
-                                  np.prod(np.array(Xshape)[cdims]))
+            rdim, *cdims)
+        Y = np.array(Y).reshape(Xshape[rdim],np.prod(np.array(Xshape)[cdims]),order='F')
+        Y = torch.Tensor(Y)
         if as_np:
             Y = np.array(Y)
             if force_sparse:

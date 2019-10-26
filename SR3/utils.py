@@ -1,7 +1,7 @@
 import numbers
 import numpy as np
 from inspect import isclass
-
+from collections.abc import Iterable
 
 def check_positive(**params):
     """Check that parameters are positive as expected
@@ -111,3 +111,30 @@ def matrix_is_equivalent(X, Y):
     """
     return X is Y or (isinstance(X, Y.__class__) and X.shape == Y.shape and
                       np.sum((X != Y).sum()) == 0)
+
+def match_and_pad_like(x, Y, criteria_func=lambda x, Y: x >= Y, fit_func=lambda z: z // 2):
+    """ Takes number or array-like x and pads it to be an array of the same shape as Y.
+        Write z = match_and_pad_like(x,Y)
+        For each index i of the expanded x,
+        If criteria_func(x[i],Y) == True, then z[i] = fit_func(x[i]).
+        For default settings this takes the input and if it is larger than Y it halves it.
+    """
+    dims = len(Y)
+    Y = np.array(Y)
+    # x is either an iterable or an element.  It can contain a mixture of types.  We want to make a list of length len(Y).
+    if not isinstance(x, Iterable):
+        x = [x] * dims  # repeat whatever x is.
+
+    # now we check to see if x is incomplete. If it is incomplete, pad it with zeros.
+    if isinstance(x, (list, np.ndarray)):
+        z = x + [0] * (dims - len(x))
+    # finally round everything
+    q = np.where([isinstance(ele, str)for ele in z], -1e6, z).astype(float)
+    q = np.rint(q).astype(int)
+    q = np.where(criteria_func(q, Y), fit_func(Y), q)
+    for i in range(dims):
+        if q[i] < 0:
+            z[i] = z[i]
+        else:
+            z[i] = q[i]
+    return z

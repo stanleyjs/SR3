@@ -4,6 +4,19 @@ from . import linalg
 
 
 class ShrinkageFunction(object):
+    """
+    Base class for shrinkage functions.
+
+    Generically, a shrinkage function f
+    will have a parameter-dependent
+    interval I = [-alpha, alpha] for which
+    f(x) << x for x in I, and for x not in I
+    f(x) = approx(x)
+
+    To be used with SR3,
+    subclasses must implement ._exact() and ._prox()
+    which are parameterized by gamma.
+    """
     def __new__(cls, desired_base, epsilon=1e-8):
         x = type(desired_base.__name__ + 'Shrinkage',
                  (ShrinkageFunction, desired_base), {'epsilon': epsilon})
@@ -37,7 +50,7 @@ class Log(object):
         pass
 
     def _prox(self, gamma):
-        print(gamma)
+        raise NotImplementedError("Log Shrinkage prox is not implemented")
 
     def _exact(self, theta, gamma=None, total=True):
         theta = theta + self.epsilon
@@ -46,7 +59,7 @@ class Log(object):
 
 
 class Snowflake(object):
-    def __init__(self, super, epsilon=1e-8):
+    def __init__(self, super, epsilon=1e-15):
         pass
 
     def _prox(self, theta, gamma, sgn=None):
@@ -73,7 +86,8 @@ class Snowflake(object):
         return torch.sum(y) if total else y
 
     def _cubic_real_roots(self, coeffs):
-        #   solve for real roots of N cubic polynomials of real coefficients written as
+        #   solve for real roots of N cubic polynomials 
+        #   of real coefficients written as
         #   0 = x^3 + p x^2 + q x^2 + r
         #   using a factorization of
         #   y^3 + ay + b = 0
@@ -136,7 +150,7 @@ class Snowflake(object):
             solutions[2, three_roots] = 2 * \
                 torch.sqrt(-tmp_a / 3) * \
                 torch.cos(phi / 3 + (4 * np.pi) / 3)
-        mask = linalg.around(solutions, 6) == 0
+        mask = solutions == 0
         solutions = solutions - p / 3
         solutions[(mask)] = 0
-        return linalg.around(solutions, 6).T
+        return solutions.T
