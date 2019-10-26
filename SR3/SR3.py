@@ -98,7 +98,7 @@ def approximate_nn_incidence(X, k=5, n_pca=10, rank_threshold=None, **kwargs):
     return incidence_matrix, edges
 
 
-def tensor_incidence(X, k=5, as_sparse=True, n_pca=10, rank_threshold=None, **kwargs):
+def tensor_incidence(X, phi = None, k=5, as_sparse=True, n_pca=10, rank_threshold=None, **kwargs):
     X = linalg.check_tensor(X)
     k = match_and_pad_like(k, X.shape)
     n_pca = match_and_pad_like(n_pca, X.shape)
@@ -111,12 +111,14 @@ def tensor_incidence(X, k=5, as_sparse=True, n_pca=10, rank_threshold=None, **kw
             continue
         else:
             Y = linalg.tenmat(X, mode)
-
-            phi_bak, _ = approximate_nn_incidence(Y, k=k[mode],
+            if phi is None:
+                phi_bak, _ = approximate_nn_incidence(Y, k=k[mode],
                                                   n_pca=n_pca[mode],
                                                   rank_threshold=rank_threshold[mode],
                                                   **kwargs)
-            phi = phi_bak.tocsr()
+            else:
+                phi_bak = phi[mode]
+            phi_c = phi_bak.tocsc()
             # phi = coo_matrix_to_torch(phi)
             left_n = np.prod(np.array(X.shape)[
                              np.flatnonzero(np.arange(X.dim()) > mode)])
@@ -124,11 +126,11 @@ def tensor_incidence(X, k=5, as_sparse=True, n_pca=10, rank_threshold=None, **kw
             right_n = np.prod(np.array(X.shape)[
                               np.flatnonzero(np.arange(X.dim()) < mode)])
             right_eye = speye(int(right_n))
-            Ad = kron(left_eye, kron(phi, right_eye))
+            Ad = kron(left_eye, kron(phi_c, right_eye))
             L = L + Ad.T.dot(Ad)
             phis.append(phi_bak)
-            Ads.append(Ad.tocsr())
-    return L.tocsr(), phis, Ads
+            Ads.append(Ad.tocsc())
+    return L.tocsc(), phis, Ads
 
 
 class SR3(BaseEstimator):
@@ -161,16 +163,16 @@ class SR3(BaseEstimator):
     def x(self):
         return self.X.reshape(-1)
 
-    def fit(self, X, mask=False):
+    def fit(self, X, phi = None, mask=False):
         # construct a knn graph on X
         # TODO: make this take nans in X and convert them to
         # the missing data case.
         X = linalg.check_tensor(X)
         self.X = X
-        self.L, self.phi, self.A = tensor_incidence(self.X, k=self.k)
+        self.L, self.phi, self.A = tensor_incidence(self.X, phi=phi, k=self.k)
         self.nd = self.ndim = self.X.ndim
         self.numel = self.L.shape[0]
-        self.I = speye(self.numel)
+        self.I = speye(self.numel).tocsc()
         self.solver = self.solver.build(A=self.nu * self.I + self.L)
         return self
 
@@ -211,15 +213,15 @@ class SR3(BaseEstimator):
         sumV = np.zeros(self.numel)
         A = self.A
         for d in range(self.nd):
-            uij = torch.Tensor(A[d].dot(U))
+            uij = A[d].dot(U)
             v.append(uij)
             stride = (self.phi[d].shape[0])
             otherdim = len(uij) // stride
-            uij = torch.reshape((uij), [stride,-1])
-            dists = linalg.vecnorm(uij)
+            uij = torch.reshape(torch.tensor(uij), [stride,-1])
+            dists = linalg.vecnorm(uij,dim=1)
             temp = self.shrinkage_function.prox(dists, gamma[d]) / dists
-            v[d] = v[d] * torch.tensor(np.matlib.repmat(temp, 1, otherdim))
-            sumV = sumV + A[d].T.dot(v[d].T).squeeze()
+            v[d] = (np.array(v[d])* np.matlib.repmat(temp, 1, otherdim))
+            sumV = sumV + A[d].T.dot(v[d].squeeze())
         return v, sumV
 
     def getScale(self, gamma, iter=100,halt=True):

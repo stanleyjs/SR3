@@ -4,10 +4,67 @@ import os
 import numpy as np
 from numpy.ctypeslib import ndpointer, as_array
 from scipy.sparse import issparse
+import scipy.sparse.linalg as spla
 from pygsp.graphs import Graph
 from pygsp.filters import Filter
 from SR3 import utils
 
+""" Linop( A ): .matvec .rmatvec( sparse vecs )
+http://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html
+http://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.lsmr.html
+"""
+
+import numpy as np
+from scipy import sparse
+from scipy.sparse.linalg import LinearOperator  # $scipy/sparse/linalg/interface.py
+
+__version__ = "2015-12-24 dec  denis + safe_sparse_dot"
+
+
+#...............................................................................
+class Linop( LinearOperator ):  # subclass ?
+    """ Aop = Linop( scipy sparse matrix A )
+        ->  Aop.matvec(x) = A dot x, x ndarray or sparse
+            Aop.rmatvec(x) = A.T dot x
+        for scipy.sparse.linalg solvers like lsmr
+    """
+
+    def __init__( self, A ):
+        self.A = A
+
+    def matvec( self, x ):
+        return safe_sparse_dot( self.A, x )
+
+    def rmatvec( self, y ):
+        return safe_sparse_dot( self.A.T, y )
+
+        # LinearOperator subclass should implement at least one of _matvec and _matmat.
+    def _matvec( self, b ):
+        raise NotImplementedError( "_matvec" )
+
+        # not _matvec only:
+        # $scipy/sparse/linalg/interface.py
+        # def matvec(self, x):
+        #     x = np.asanyarray(x)  <-- kills sparse x, should raise an error
+
+    def _rmatvec( self, b ):
+        raise NotImplementedError( "_rmatvec" )
+
+    @property
+    def shape( self ):
+        return self.A.shape
+
+
+def safe_sparse_dot( a, b ):
+    """ -> a * b or np.dot(a, b) """
+        # from sklearn
+    if sparse.issparse(a) or sparse.issparse(b):
+        try:
+            return a * b
+        except:
+            raise
+    else:
+        return np.dot(a, b)
 
 def full_lib_path(lib, path):
     os.chdir(path)
@@ -78,13 +135,46 @@ class Solver(object):
         if A is None and self._A is None:
             raise ValueError(
                 "Building a solver requires an objective matrix. Please pass an A matrix.")
+        else:
+            self._A = self.A(A)
 
+class PCGSolver(Solver):
+    def __init__(self, A=None, preconditioner = 'spilu',**kwargs):
+        super().__init__(A)
+        self.scipy_params = kwargs
+        if self._A is not None:
+            self.build(preconditioner = preconditioner, 
+                        **self.scipy_params)
 
+    def A(self, A=None):
+        self._A = super().A(A)
+        return self._A
+
+    def build(self, A=None, preconditioner = 'spilu',**kwargs):
+        super().build(A,**kwargs)
+        A = self._A
+        if preconditioner == 'spilu':
+            M = spla.spilu(A)
+            M = spla.LinearOperator(A.shape,M.solve)
+
+            self.__solve = lambda b: spla.bicg(A,b,**kwargs)
+        else:
+            self.__solve = lambda b: spla.bicg(A,b,**kwargs)
+        self.built = True
+        return self
+
+    def solve(self, b, A=None):
+        if A is not None:
+            self._A = self.A(A)
+        if not self.built:
+            self.build()
+
+        return self.__solve(b)[0]
 class PygspSolver(Solver):
     def __init__(self, A=None, **kwargs):
         super().__init__(A)
         self.pygsp_params = kwargs
-        if A is not None:
+        if self._A is not None:
             self.build(**self.pygsp_params)
 
     def A(self, A=None):
@@ -101,7 +191,7 @@ class PygspSolver(Solver):
         M.eliminate_zeros()
         g = Graph(M)
         g.estimate_lmax()
-        f = Filter(g, lambda x: 1 / (offset * 1 + x))
+        f = Filter(g, lambda x: 1 / (1 + offset*x))
         #self._G = g
         self.__solve = f.filter
         self.built = True
@@ -113,7 +203,6 @@ class PygspSolver(Solver):
         if not self.built:
             self.build()
         return self.__solve(b, order=order)
-
 
 class JuliaSolver(Solver):
     def __init__(self, path_to_library, A=None):
