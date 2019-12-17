@@ -2,4 +2,4 @@
 *.pyc
 Python/docs/build*
 scratch/*
-.m~
+*.m~
