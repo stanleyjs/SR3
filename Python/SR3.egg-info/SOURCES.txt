@@ -1,4 +1,3 @@
-README.rst
 setup.py
 SR3/SR3.py
 SR3/__init__.py
