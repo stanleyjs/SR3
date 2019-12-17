@@ -1,6 +1,6 @@
 SR3 fusion Clustering
 =====================
-A Python version of SR3 fusion clustering is available from PyPi.
+An (ALPHA) Python version of SR3 fusion clustering is available from PyPi.
 ``pip install --user SR3``
 
 To get the latest version from Github, 
