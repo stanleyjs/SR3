@@ -1,0 +1,16 @@
+numpy>=1.14.0
+scipy>=1.1.0
+scikit-learn
+future
+torch
+graphtools
+nmslib
+
+[docs]
+sphinx
+sphinxcontrib-napoleon
+
+[test]
+nose
+nose2
+anndata

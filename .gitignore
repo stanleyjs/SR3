@@ -1,0 +1,4 @@
+*.ipynb
+*.pyc
+Python/docs/build*
+scratch/*

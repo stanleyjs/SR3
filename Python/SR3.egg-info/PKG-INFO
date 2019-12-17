@@ -1,0 +1,26 @@
+Metadata-Version: 2.1
+Name: SR3
+Version: 0.0.1.1
+Summary: SR3 fusion clustering
+Home-page: https://github.com/stanleyjs/SR3
+Author: Jay S. Stanley III, Gal Mishne, Eric C. Chi, and Ronald R. Coifman
+Author-email: jay.s.stanley.3@gmail.com
+License: GNU General Public License Version 2
+Description: SR3 Fusion clustering
+Keywords: tensors,big-data,signal processing,manifold-learning,clustering
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Framework :: Jupyter
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Natural Language :: English
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Provides-Extra: test
+Provides-Extra: docs
