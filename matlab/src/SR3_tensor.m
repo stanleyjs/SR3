@@ -48,7 +48,7 @@
 %
 %   SR3.params.maxiter = 1000; maximum iterations
 %   SR3.params.epsilon = 1e-8; % precision
-%   SR3.params.pcg_stop = true; % halt iterations when PCG only runs for 1
+%   SR3.params.pcg_stop = false; % halt iterations when PCG only runs for 1
 %   iter.
 %    SR3.params.verbose = true; % print details of iterations to standard out.
 %    
@@ -73,12 +73,13 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
         fprintf('Computing Laplacian \n')
     end
     if contains('legendre',SR3.solver.f)
-        compute_lmax = true;
+        compute_lbounds = true;
     else
-        compute_lmax = false;
+        compute_lbounds = false;
         lmax = 0;
+        lmin = 0;
     end
-    [L,A] = tensor_incidence(phi, compute_lmax);
+    [L,A,lmin,lmax] = tensor_incidence(phi, compute_lbounds);
     modes = ndims(X);
     
     if isa(X, 'sptensor')
@@ -95,7 +96,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     end
 
     
-    solver = design_solver(L, I, SR3.nu, SR3.solver, verbose,lmax);
+    solver = design_solver(L, I, SR3.nu, SR3.solver, verbose,lmin,lmax);
 
     sumV = 0;
     V0 = {};
@@ -124,7 +125,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     while go && jj < SR3.params.maxiter
         U_prev = U0;
         Fprev = F0;
-        [V0,sumV] = updateV(U0,SR3.nu.*SR3.gamma);
+        [V0,sumV] = updateV(U0,SR3.gamma);
         [U0,iter] = updateU(sumV,U_prev,solver);
         [F0,f1,f2,f3,mode_loss] = objective_prox(x,U0,V0,A,SR3.nu,SR3.gamma,SR3.prox,SR3.params.epsilon);
         SR3.output.F = [SR3.output.F;F0 f1 f2 f3 cell2mat(mode_loss)];
@@ -186,7 +187,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
 
             uij = reshape(tensor(uij), [stride,otherdim]);
             temp = vecnorm(double(uij)');
-            temp = SR3.proxfun(temp,gam(c),1e-8)./temp;
+            temp = SR3.proxfun(temp,gam(c),SR3.params.epsilon)./temp;
 
             v{c}(1:end) = v{c}(1:end).*repmat(temp,1,otherdim)';
             sumV = sumV+ A{c}'*v{c};
@@ -196,7 +197,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
 end
 
 
-function [solve] = design_solver(L, I, nu, solver, verbose,lmax)
+function [solve] = design_solver(L, I, nu, solver, verbose,lmin,lmax)
     params = solver.params;
     solver = solver.f;
  % the matrix to invert
@@ -226,9 +227,18 @@ function [solve] = design_solver(L, I, nu, solver, verbose,lmax)
         if pre, precond = ichol(mat); else precond = speye(size(mat,1)); end
         solve = @(b,b0) solve(b,b0,precond);
     elseif contains(solver,'legendre')
-        solve = @(b,order,coeffs) matvecleg(L, b, 100, coeffs);
-        coeffs = fit_legendre(@(x) 1./(nu+x),100,lmax);
-        
+        order = 50; %add to parameters ultimately.
+        lower = lmin;%10^floor(log10(lmin)-1);
+        upper = lmax;%10^ceil(log10(lmax)+1);
+        [coeffs,error] = fit_legendre(@(x) 1./(nu+x), order, lower, upper);
+        while error>1e-5
+            error
+            order = order+50;
+            [coeffs,error] = fit_legendre(@(x) 1./(nu+x),order, lower, upper);
+        end
+        mat = ((L./lmax)*2)-speye(size(L,1));
+        [ix,jx,s] = find(mat);
+        solve = @(b,b0) matvecleg(mat, b, order, coeffs,ix,jx,s);
     else
         if verbose, fprintf('Computing cholesky factors \n'); end
         m = decomposition(mat);
@@ -259,7 +269,7 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     default.SR3.params.verbose = true;
     default.SR3.params.warnings = false;
     default.SR3.params.store_updates = false;
-    default.SR3.params.pcg_stop = true;
+    default.SR3.params.pcg_stop = false;
     default.SR3.graph.knn = 10;
     default.SR3.graph.params.approx = true;
     default.SR3.graph.params.low_rank = 6;
@@ -270,7 +280,7 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     [pth,~,~] = fileparts(mfilename('fullpath'));
     default.SR3.params.paths.tensor_toolbox = [pth '/tensor_toolbox'];
     default.SR3.params.paths.rann = [pth '/RANN'];
-    
+    default.solver.f = 'pcg_preconditioned';
     addRequired(p, 'X', @(x) isnumeric(x) || isa(x, 'tensor') ||isa(x,'sptensor'));
     addOptional(p, 'phi', default.phi, @(x) isnumeric(x) || islogical(x) ||iscell(x));
     addOptional(p, 'SR3',default.SR3, @(x) isstruct(x));
@@ -368,9 +378,9 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
         solver.f = default.solver.f;
     end
     solver.f = lower(char(solver.f));
-    if ~any(strcmp(solver.f,{'pcg','pcg_preconditioned', 'factors','chebyshev','chebyshev_alt',}))
+    if ~any(strcmp(solver.f,{'pcg','pcg_preconditioned', 'factors','legendre','chebyshev','chebyshev_alt',}))
         fprintf([char("solver.f was invalid. Must be one of") ...
-        char("{'pcg','pcg_preconditioned', 'factors','chebyshev','chebyshev_alt}.")...
+        char("{'pcg','pcg_preconditioned', 'factors','legendre','chebyshev','chebyshev_alt}.")...
         ' Setting to default pcg_preconditioned']);
     end
     if isfield(solver,'params')

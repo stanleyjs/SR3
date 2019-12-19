@@ -20,7 +20,7 @@ row_labels(51:56) = 4; % small cell
 x = matrix;
 
 %% SOME SR3 PARAMETERS
-maxit = 100;
+maxit = 10;
 knn = [10,10];
 clear SR3
 SR3.params.tolF = 1e-15;
@@ -34,7 +34,7 @@ SR3.params.store_updates = false; %STORE THE WHOLE GAMMA PATH
 rho_log = {@log, @logprox}; 
 rho_flake = {@snowflake, @flakeprox};
 rho_l2 = {@vecnorm, @l2_prox};
-
+SR3.solver.f = 'legendre';
 % IDENTITY
 SR3.gamma = [0 0];
 SR3.nu = 1e-6;
@@ -44,11 +44,11 @@ SR3.nu = 1e-6;
 [SR3] = SR3_tensor(x, phi,SR3);
 
 %% Single MODE
-SR3.gamma = 1e8*[1 0];
+SR3.gamma = [1 0];
 [SR3] = SR3_tensor(x, phi,SR3);
 
 %% Two MODE
-SR3.gamma = 1e8*[0.3 0.7];
+SR3.gamma = [0.3 0.7];
 [SR3] = SR3_tensor(x, phi,SR3);
 
 
