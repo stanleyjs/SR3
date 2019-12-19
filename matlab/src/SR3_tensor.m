@@ -161,7 +161,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
 
     function [U,iter] = updateU(sumV,Uprev,solve)
         Uprev = double(Uprev);
-        U = SR3.nu*I*double(Uprev) + sumV;
+        U = SR3.nu*I*double(x) + sumV;
         U = U-mean(U);
         if verbose
             U = solve(U,Uprev);
