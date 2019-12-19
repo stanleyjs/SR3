@@ -19,10 +19,10 @@ SR3.params.paths.rann = './RANN';
 SR3.params.paths.tensor_toolbox = './tensor_toolbox';
 SR3.solver.f = 'legendre';
 %params for regular SR3
-SR3.gamma=[0 1];
+SR3.gamma=[0 0.1];
 % SR3.min_gamma = 1e-4;
 
-SR3.nu = 1e-3;
+SR3.nu = 1e-6;
 SR3.solver.params.tol = 1e-6;
 
 grph.paths.rann = SR3.params.paths.rann;

@@ -161,7 +161,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
 
     function [U,iter] = updateU(sumV,Uprev,solve)
         Uprev = double(Uprev);
-        U = SR3.nu*I*double(x) + sumV;
+        U = SR3.nu*I*double(Uprev) + sumV;
         U = U-mean(U);
         if verbose
             U = solve(U,Uprev);
@@ -227,12 +227,11 @@ function [solve] = design_solver(L, I, nu, solver, verbose,lmin,lmax)
         if pre, precond = ichol(mat); else precond = speye(size(mat,1)); end
         solve = @(b,b0) solve(b,b0,precond);
     elseif contains(solver,'legendre')
-        order = 50; %add to parameters ultimately.
+        order = 500; %add to parameters ultimately.
         lower = lmin;%10^floor(log10(lmin)-1);
         upper = lmax;%10^ceil(log10(lmax)+1);
         [coeffs,error] = fit_legendre(@(x) 1./(nu+x), order, lower, upper);
-        while error>1e-5
-            error
+        while error>1e-4
             order = order+50;
             [coeffs,error] = fit_legendre(@(x) 1./(nu+x),order, lower, upper);
         end
