@@ -62,6 +62,9 @@
 %         SR3.solver.params.tol =SR3.params.store_updates 1e-8;
 %         SR3.solver.params.maxit = 100;
 %         SR3.solver.params.verbose = false;
+% 
+%    SR3.missing_data -  TRUE for where values exists, false for missing
+%    entries
 %
 function [SR3,phi,jj] = SR3_tensor(X, varargin)
 %   
