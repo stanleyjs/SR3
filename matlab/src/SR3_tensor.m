@@ -96,7 +96,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     end
 
     
-    solver = design_solver(L, I, SR3.nu, SR3.solver, verbose,lmin,lmax);
+    solver = design_solver(L, I, SR3.nu, SR3.solver, verbose,lmin,lmax,phi);
 
     sumV = 0;
     V0 = {};
@@ -197,7 +197,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
 end
 
 
-function [solve] = design_solver(L, I, nu, solver, verbose,lmin,lmax)
+function [solve] = design_solver(L, I, nu, solver, verbose,lmin,lmax,phi)
     params = solver.params;
     solver = solver.f;
  % the matrix to invert
@@ -227,17 +227,16 @@ function [solve] = design_solver(L, I, nu, solver, verbose,lmin,lmax)
         if pre, precond = ichol(mat); else precond = speye(size(mat,1)); end
         solve = @(b,b0) solve(b,b0,precond);
     elseif contains(solver,'legendre')
-        order = 500; %add to parameters ultimately.
-        lower = lmin;%10^floor(log10(lmin)-1);
+        order = 50; %add to parameters ultimately.
+        [psi,lambda] = prodgraph_eigs(phi,200);
+        [lambda,ix] = sort(lambda);
+        psi = psi(:,ix);
+        lower = min(0.1,max(lambda));%10^floor(log10(lmin)-1);
         upper = lmax;%10^ceil(log10(lmax)+1);
         [coeffs,error] = fit_legendre(@(x) 1./(nu+x), order, lower, upper);
-        while error>1e-4
-            order = order+50;
-            [coeffs,error] = fit_legendre(@(x) 1./(nu+x),order, lower, upper);
-        end
         mat = ((L./lmax)*2)-speye(size(L,1));
-        [ix,jx,s] = find(mat);
-        solve = @(b,b0) matvecleg(mat, b, order, coeffs,ix,jx,s);
+        
+        solve = @(b,b0) partial_legendre(mat, b, order, coeffs, psi, lambda, nu);
     else
         if verbose, fprintf('Computing cholesky factors \n'); end
         m = decomposition(mat);
@@ -245,7 +244,16 @@ function [solve] = design_solver(L, I, nu, solver, verbose,lmin,lmax)
     end
 end
 
+function x = partial_legendre(mat, b, order, coeffs, psi, lambda,nu)
 
+    bproj = psi'*b;
+    borth = b-(psi*bproj);
+    Htapsnu = 1./(nu+lambda);
+    Htaps_bproj = bproj.*Htapsnu;
+
+    borth_approx = matvecleg(mat,borth,order,coeffs);
+    x = (psi*Htaps_bproj)+borth_approx;
+end
 function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     %collate and parse input parameters
     p = inputParser;

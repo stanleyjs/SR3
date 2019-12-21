@@ -1,4 +1,4 @@
-function y = matvecleg(M, v, order, coeffs, ix,jx,sx)
+function y = matvecleg(M, v, order, coeffs)
     %% compute the order-th legendre polynomial approximaton of f(M)v
     %% where f is described by coeffs 
     %%
