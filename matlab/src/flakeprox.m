@@ -85,5 +85,5 @@ function solutions = cubicrealroots(p,q,r,N)
     %     phi = acos(sign(b)*sqrt((b^2/4)/(-a^3/27)));
     %     candidates = 2.*sqrt(-a/3).*cos(phi./3+(2*[0,1,2]*pi)./3);
     % end
-    solutions = solutions - p/3;
+    solutions(solutions~=0) = solutions(solutions~=0) - p/3;
 end
