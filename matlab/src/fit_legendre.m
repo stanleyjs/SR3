@@ -15,6 +15,7 @@ function [coeffs,error] = fit_legendre(f,order,lower, upper)
             u(i,j)=v(j,i)*wts(j)*d;
         end
     end
-    coeffs = u*fs;
+    coeffs = (u*fs);
+%     coeffs(abs(coeffs)<1e-9) = 0;
     error = 10^floor(log10(abs(coeffs(end))));
 end
