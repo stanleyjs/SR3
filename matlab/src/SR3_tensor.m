@@ -159,7 +159,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
         end
     end
     if verbose
-        fprintf([' ***** \n SR3 halted a fter %i total iterations\n'],jj) 
+        fprintf([' ***** \n SR3 halted after %i total iterations\n'],jj) 
     end
 
     function [U,iter] = updateU(sumV,Uprev,solve)
