@@ -22,7 +22,7 @@ x = matrix;
 maxit = 100;
 knn = [10,10];
 clear SR3
-SR3.params.tolF = 1e-8;
+SR3.params.tolF = 1e-4;
 SR3.params.pcg_stop = false; %BUG? true is equivalent to maxit = 1!
 %Right now pcg_stop = true stops the algorithm after the first PCG iteration.
 % The intention was to stop when pcg hits some convergence setting.

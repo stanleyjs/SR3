@@ -12,10 +12,10 @@ function [gammas, ratios, magnitudes] = convexratios(dims,n_ratios, n_scales,min
             output = [output; ratio1(i) rem];
         end
     end
-    for i = 1:size(output,1)
-        ratios = [ratios; perms(output(i,:))];
-    end
-    tmpratios = unique(round(ratios,15),'rows');
+%     for i = 1:size(output,1)
+%         ratios = [ratios; perms(output(i,:))];
+%     end
+    tmpratios = unique(round(output,15),'rows');
     tmpmagnitudes = linspace(minscale,maxscale, n_scales);
     ratios = [];
     gammas = [];

@@ -1,4 +1,4 @@
-function y = matvecleg(M, v, order, coeffs, ix,jx,sx)
+function y = matvecleg(M1,M2, v, order, coeffs)
     %% compute the order-th legendre polynomial approximaton of f(M)v
     %% where f is described by coeffs 
     %%
@@ -8,31 +8,16 @@ function y = matvecleg(M, v, order, coeffs, ix,jx,sx)
     %% Pk+1(M)*v = ((2*k+1) * M * Pk(M) - k * Pk-1(M))/(k+1) * v;
     %% = ((2*k+1) * M * (Pk(M)*v) - k * Pk-1(M)*v)/(k+1)
     %% the normalization for Pk is sqrt((2*k+1)/2)
-    n = size(M,1);
-    P0v = v;
-    P1v = M;
-    P1v = P1v*v;
-    y = coeffs(1)*P0v+coeffs(2)*P1v;
+    n = size(M1,1);
+    pk = v;
+    pkp1 =M2*(M1'*v);
+    y = coeffs(1)*pk+coeffs(2)*pkp1;
 
     for k = 2:(order-1)
-        P2v = (2*P1v*k-P1v);
-        P2v = M*P2v;
-        P2v = P2v - (k-1)*P0v;
-        P2v = P2v/k;
-%         P2vbak = P2v;
-%         parfor vx = 1:n
-%             row = ix == vx;
-%             vals = sx(row)
-%             temp = sum(vals.*P2vbak(jx(row)))
-%             temp = temp - (k-1) * P0v(vx)
-%             P2v(vx) = temp/k;
-%         end
-%         P2v =  P2v- (k-1)*P0v;
-%         P2v = P2v/k;
-        y = y + coeffs(k+1)*P2v;
-        P0v = P1v;
-
-        P1v = P2v;  
+        pkm1=pk;
+        pk= pkp1;
+        pkp1=( (2*k-1)*M2*(M1'*pk)-(k-1)*pkm1)/(k);
+        y = y+coeffs(k+1)*pkp1;
     end
 
 end
