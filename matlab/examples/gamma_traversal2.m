@@ -4,9 +4,9 @@ close all; clear;
 %try
 %load lung500
 %catch
-load('/Users/mishne/Dropbox/Yale/data/coorg/lung500.mat')
+load('/Users/mishne/Dropbox/Yale/data/coorg/lung100.mat')
 %end
-matrix = lung500;
+matrix = lung100;
 gamma_vec = 2.^[-6:0.25:2];
 lim_lower = -6;
 lim_upper = 6;
@@ -17,14 +17,14 @@ row_labels(21:33) = 2; % colon
 row_labels(34:10) = 3;  % normal
 row_labels(51:56) = 4; % small cell
 
-% [matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
-x = matrix;
-
+%[matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
+x = matrix';
+%x = x - mean(x(:));
 %% SOME SR3 PARAMETERS
 maxit = 100;
-knn = [10,10];
+knn = [5,5];
 clear SR3
-SR3.params.tolF = 1e-8;
+SR3.params.tolF = 1e-6;
 SR3.params.pcg_stop = false; %BUG? true is equivalent to maxit = 1!
 %Right now pcg_stop = true stops the algorithm after the first PCG iteration.
 % The intention was to stop when pcg hits some convergence setting.
@@ -43,6 +43,11 @@ convexparams.max_mag = 2; % maximum magnitude.  You want this to be proportional
 
 SR3.nu = 1e-6;
 [phi] = tensor_graph(x,knn);
+[L,A] = tensor_incidence(phi,false);
+
+SR3.params.epsilon = 1;
+
+gammas = maxgamma(L,A,phi,x,SR3.nu,SR3.params.epsilon);
 
 [SR3,gammas,ratios,magnitudes] = SR3_simplex2(x, phi,convexparams,SR3);
 
@@ -106,8 +111,8 @@ for i =1:length(vk)
     mc=(bsxfun(@times,~vecnorm(double(vk{1,i}{1,2}),2,2),double(phi{2, 1})));
     Lc = mc'*mc;
     
-    mr=(bsxfun(@times,~vecnorm(double(vk{1,i}{1,1}),2,2)',double(phi{1, 1})'));
-    Lr = mr*mr';
+    mr=(bsxfun(@times,~vecnorm(double(vk{1,i}{1,1}),2,2),double(phi{1, 1})));
+    Lr = mr'*mr;
     
     G_r = graph(Lr);
     cc_rows = conncomp(G_r);
@@ -164,5 +169,15 @@ for i=1:1:numel(uk)
     nuk{i} = t;
 end
 filename = './lung_fixed.gif';
+f = cell2imgif(nuk,filename, false, 0.1, 1,true,false);
 
 
+%%
+figure;pause(3)
+for i=1:100
+    
+    subplot(121);imagesc(double(vk{1, i}{1,2}  ));colorbar;
+    title(sprintf('gamma_r=%1.2f, gamma_c = %1.2f',gammas(i,1),gammas(i,2)))
+    subplot(122);imagesc(double(vk{1, i}{1,1}  ));colorbar;
+    pause(0.5);
+end

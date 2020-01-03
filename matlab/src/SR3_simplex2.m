@@ -4,7 +4,7 @@ function [output, gammas, ratios, magnitudes] = SR3_simplex(X, varargin)
     [gammas,ratios,magnitudes] = convexratios(convexparams.dims,Nratios,convexparams.Nmagnitudes,convexparams.min_mag, convexparams.max_mag);
     gt_ratios = unique(ratios,'rows');
     output = struct();
-    for j = 1:size(gt_ratios,1)
+    for j = size(gt_ratios,1):-1:1
         output(j).ratio = gt_ratios(j,:);
         mask = ratios == gt_ratios(j,:);
         mask = any(mask,2);
@@ -14,7 +14,7 @@ function [output, gammas, ratios, magnitudes] = SR3_simplex(X, varargin)
         output(j).U = {};
         output(j).V = {};
         output(j).F = {};
-        for kk = 1:size(gamj,1)
+        for kk = 1:1:size(gamj,1)
             SR3.gamma = gamj(kk,:);
             [output(j).SR3{kk},~,jj] = SR3_tensor(X,phi,SR3);
             output(j).U{kk} = output(j).SR3{kk}.output.U;

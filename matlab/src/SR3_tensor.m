@@ -92,6 +92,9 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     end
     N = size(x,1);
     sz = size(X);
+    if length(sz)==2
+        sz(3) = 1;
+    end
     if ~isempty(SR3.missing_data)
         I = spdiags(SR3.missing_data, 0, N, N);
     else
@@ -155,11 +158,36 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
         for k = 1:modes
             edges =size(phi{k},1);
             dimension = max(size(V0{k}))/edges;
+            switch k
+                case 2
+                    % uij is U whose dims have been permuted to
+                    % stride x sz1 x sz3
+                    smat = modp_shuffle_permute(sz(1),edges);
+                    V0{k} = kron(eye(sz(3)),smat) * V0{k};
+                case 3
+                    % uij is U whose dims have been permuted to
+                    % stride x sz1 x sz2
+                    smat = modp_shuffle_permute(sz(1)*sz(2),edges);
+                    V0{k} = smat * V0{k};
+            end
             SR3.output.V{k} = reshape(tensor(V0{k}), [edges,dimension]);
+
+             %if k==2
+             %   SR3.output.V{k} = tensor(reshape((V0{k}), [dimension,edges])');
+            %end
         end
     end
+%     figure;
+%     subplot(222);imagesc(double(SR3.output.V{2}));colorbar;colormap gray
+%     subplot(221);imagesc(double(SR3.output.V{1}));colorbar;colormap gray
+%     subplot(224);imagesc(double(SR3.output.V{2})==0);colorbar;colormap gray
+%     subplot(223);imagesc(double(SR3.output.V{1})==0);colorbar;colormap gray
+%     drawnow
+%     figure;
+%     imagesc(double(SR3.output.U));colormap(gray)
+%     drawnow
     if verbose
-        fprintf([' ***** \n SR3 halted after %i total iterations\n'],jj) 
+        fprintf([' ***** \n SR3 halted after %i total iterations\n'],jj)
     end
 
     function [U,iter] = updateU(sumV,Uprev,solve)
@@ -187,12 +215,32 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
             v{c} = uij;
             stride = size(phi{c},1);
             otherdim = max(size(uij))/stride;
-
+            
+            if c == 2
+                % uij is U whose dims have been permuted to
+                % stride x sz1 x sz3
+                smat = modp_shuffle_permute(sz(1),stride);
+                uij = kron(eye(sz(3)),smat)*uij;
+            elseif c == 3
+                % uij is U whose dims have been permuted to
+                % stride x sz1 x sz2
+                smat = modp_shuffle_permute(sz(1)*sz(2),stride);
+                uij = smat *uij;
+            end
+                
             uij = reshape(tensor(uij), [stride,otherdim]);
-            temp = vecnorm(double(uij)');
-            temp = SR3.proxfun(temp,gam(c),SR3.params.epsilon)./temp;
-
-            v{c}(1:end) = v{c}(1:end).*repmat(temp,1,otherdim)';
+            temp = vecnorm(double(uij)');     
+            temp = (SR3.proxfun(temp,gam(c),SR3.params.epsilon)./temp)';
+            
+            switch c
+                case 1
+                    temp = kron(ones(otherdim,1),temp);
+                case 2
+                    temp = kron(kron(temp,ones(sz(3),1)),ones(sz(1),1));
+                case 3
+                    temp = kron(temp,ones(otherdim,1));
+            end
+            v{c}(1:end) = v{c}(1:end).*temp;
             sumV = sumV+ A{c}'*v{c};
         end
         V = v;
@@ -405,3 +453,23 @@ function A = remap_tensor(a,b)
     %remap a such that it is a tensor the same shape as b was derived from
     A = tensor(tenmat(a,b.rdims,b.cdims,b.tsize));
 end
+
+function mat = modp_shuffle_permute(p,r)
+    inds = (reshape(1:p*r,p,r))';
+    I = speye(p*r);
+    mat = I(inds,:);
+    
+%     test    
+%     p = 5;
+%     r = 3;
+%     A = rand(p,r);
+%     
+%     inds = (reshape(1:p*r,p,r))';
+%     I = eye(p*r);
+%     mat = I(inds,:);
+%     B = reshape(mat*A(:),r,p);
+%     max(max(abs(B - transpose(A))))
+    
+end
+
+
