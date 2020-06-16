@@ -156,6 +156,9 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
             edges =size(phi{k},1);
             dimension = max(size(V0{k}))/edges;
             SR3.output.V{k} = reshape(tensor(V0{k}), [edges,dimension]);
+            if k==2
+                SR3.output.V{k} = reshape(tensor(V0{k}), [dimension,edges])';
+            end
         end
     end
     if verbose
