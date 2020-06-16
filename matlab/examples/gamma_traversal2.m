@@ -4,7 +4,7 @@ close all; clear;
 %try
 %load lung500
 %catch
-load('/Users/mishne/Dropbox/Yale/data/coorg/lung100.mat')
+load('/Users/mishne/Documents/Yale/github/SR3/matlab/examples/data/lung100.mat')
 %end
 matrix = lung100;
 gamma_vec = 2.^[-6:0.25:2];
@@ -18,7 +18,7 @@ row_labels(34:10) = 3;  % normal
 row_labels(51:56) = 4; % small cell
 
 %[matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
-x = matrix';
+x = matrix;
 %x = x - mean(x(:));
 %% SOME SR3 PARAMETERS
 maxit = 100;
@@ -48,9 +48,10 @@ SR3.nu = 1e-6;
 SR3.params.epsilon = 1;
 
 gammas = maxgamma(L,A,phi,x,SR3.nu,SR3.params.epsilon);
-
+%%
+tic
 [SR3,gammas,ratios,magnitudes] = SR3_simplex2(x, phi,convexparams,SR3);
-
+toc
 %% The scales are stored ratio-wise in SR3{}
 % for i=1:convexparams.Nratios
 % SR3{i} (where i is the index of the scale) has fields
@@ -127,8 +128,13 @@ row_dist = zeros(n_rows);
 col_dist = zeros(n_cols);
 alpha = -0.5;
 for i = 2:length(nP_c)
-    gamma_c = SR3.output.gammas{i}(2);  
-    gamma_r = SR3.output.gammas{i}(1);  
+    gamma_c = gammas_sr3(i,2);  
+    gamma_r = gammas_sr3(i,1);  
+    
+    if gamma_r==0 || gamma_c ==0
+        continue
+    end
+    
     if (nP_c(i) > 1 && nP_c(i) < n_cols && nP_c(i-1) ~= nP_c(i)) || ...
             (nP_r(i) > 1 && nP_r(i) < n_rows && nP_r(i-1) ~= nP_r(i))
         row_dist  = row_dist + ...
@@ -144,17 +150,17 @@ aff_mat_row = exp(-row_dist.^2 / eps.^2);
 
 eps     = median(col_dist(:));
 aff_mat_col = exp(-col_dist.^2 / eps.^2);
-1
+
 [ vecs, vals ] = CalcEigs( aff_mat_row, 4 );
-      proxfun: @flakeprox
 embedding_rows = vecs*vals;
 [ vecs, vals ] = CalcEigs( aff_mat_col, 4 );
 embedding_cols = vecs*vals;
 %%
-figure;scatter3(embedding_rows(:,1),embedding_rows(:,2),embedding_rows(:,3),50,row_labels,'filled')
+figure;scatter3(embedding_rows(:,1),embedding_rows(:,2),embedding_rows(:,3),50,1:n_rows,'filled')
 figure;scatter3(embedding_cols(:,1),embedding_cols(:,2),embedding_cols(:,3),50,1:n_cols,'filled')
 
 %%
+figure
 clear nuk
 t = double(uk{end});
 t = t(1:end-1,:);
@@ -171,7 +177,7 @@ end
 filename = './lung_fixed.gif';
 f = cell2imgif(nuk,filename, false, 0.1, 1,true,false);
 
-
+return;
 %%
 figure;pause(3)
 for i=1:100

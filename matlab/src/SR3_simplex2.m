@@ -1,27 +1,42 @@
-function [output, gammas, ratios, magnitudes] = SR3_simplex(X, varargin)
+function [output, gammas, ratios, magnitudes] = SR3_simplex2(X, varargin)
     [X,phi,convexparams,SR3,verbose] = init_and_parse(X,varargin{:});
     Nratios = convexparams.Nratios;
     [gammas,ratios,magnitudes] = convexratios(convexparams.dims,Nratios,convexparams.Nmagnitudes,convexparams.min_mag, convexparams.max_mag);
     gt_ratios = unique(ratios,'rows');
     output = struct();
-    for j = size(gt_ratios,1):-1:1
+    
+    % init output strcut to correct size
+    n_iters = size(gt_ratios,1);
+    output(n_iters).ratio = gt_ratios(n_iters,:);
+    mask = ratios == gt_ratios(n_iters,:);
+    mask = any(mask,2);
+    gamj = gammas(mask,:);
+    output(n_iters).gammas = gamj;
+    output(n_iters).magnitudes = magnitudes(mask);
+    output(n_iters).U = cell(1,size(gamj,1));
+    output(n_iters).V = cell(1,size(gamj,1));
+    output(n_iters).F = cell(1,size(gamj,1));
+    
+    parfor j = 1:size(gt_ratios,1)%:-1:1
         output(j).ratio = gt_ratios(j,:);
         mask = ratios == gt_ratios(j,:);
         mask = any(mask,2);
         gamj = gammas(mask,:);
         output(j).gammas = gamj;
         output(j).magnitudes = magnitudes(mask);
-        output(j).U = {};
-        output(j).V = {};
-        output(j).F = {};
+        output(j).U = cell(1,size(gamj,1));
+        output(j).V = cell(1,size(gamj,1));
+        output(j).F = cell(1,size(gamj,1));
+        disp('starting inner loop')
         for kk = 1:1:size(gamj,1)
-            SR3.gamma = gamj(kk,:);
-            [output(j).SR3{kk},~,jj] = SR3_tensor(X,phi,SR3);
-            output(j).U{kk} = output(j).SR3{kk}.output.U;
-            output(j).V{kk} = output(j).SR3{kk}.output.V;
-            output(j).F{kk} = output(j).SR3{kk}.output.F;
+            gamma = gamj(kk,:);
+            [results,~,jj] = SR3_tensor(X,phi,SR3,gamma);
+            output(j).U{kk} = results.output.U;
+            output(j).V{kk} = results.output.V;
+            output(j).F{kk} = results.output.F;
             output(j).iter{kk} = jj;
         end
+        output(j).SR3 = results;
     end
 end
 
@@ -39,7 +54,7 @@ function [X, phi, convexparams, SR3,verbose] = init_and_parse(X,varargin)
     default.phi  = false;
     default.SR3.prox = prox_flake;
     default.SR3.nu = 1;
-    default.SR3.gamma = 1;
+    %default.SR3.gamma = 1;
     default.SR3.missing_data = [];
     default.SR3.params.tolF = 1e-6;
     default.SR3.params.maxiter = 1000;

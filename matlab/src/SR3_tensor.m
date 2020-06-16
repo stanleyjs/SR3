@@ -68,7 +68,7 @@
 %
 function [SR3,phi,jj] = SR3_tensor(X, varargin)
 %   
-    [X, phi, SR3, verbose] = init_and_parse(X,varargin{:});
+    [X, phi, SR3, gamma, verbose] = init_and_parse(X,varargin{:});
     
 
     % Laplacian from input incidence
@@ -120,7 +120,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
         end
         SR3.output.U{1} = remap_tensor(U0,x);
     end
-    [F0,f1,f2,f3,F_prev_mode] = objective_prox(x,U0,V0,A,SR3.nu,SR3.gamma,SR3.prox,SR3.params.epsilon);
+    [F0,f1,f2,f3,F_prev_mode] = objective_prox(x,U0,V0,A,SR3.nu,gamma,SR3.prox,SR3.params.epsilon);
     SR3.output.F = [F0 f1 f2 f3 cell2mat(F_prev_mode)];
 
     jj = 2;
@@ -131,9 +131,9 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     while go && jj < SR3.params.maxiter
         U_prev = U0;
         Fprev = F0;
-        [V0,sumV] = updateV(U0,SR3.gamma);
+        [V0,sumV] = updateV(U0,gamma);
         [U0,iter] = updateU(sumV,U_prev,solver);
-        [F0,f1,f2,f3,mode_loss] = objective_prox(x,U0,V0,A,SR3.nu,SR3.gamma,SR3.prox,SR3.params.epsilon);
+        [F0,f1,f2,f3,mode_loss] = objective_prox(x,U0,V0,A,SR3.nu,gamma,SR3.prox,SR3.params.epsilon);
         SR3.output.F = [SR3.output.F;F0 f1 f2 f3 cell2mat(mode_loss)];
         if SR3.params.store_updates
             for k = 1:modes
@@ -305,7 +305,7 @@ function x = partial_legendre(mat, b, order, coeffs, psi, lambda,nu)
     borth_approx = matvecleg(mat,borth,order,coeffs);
     x = (psi*Htaps_bproj)+borth_approx;
 end
-function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
+function [X, phi, SR3, gamma, verbose] = init_and_parse(X,varargin)
     %collate and parse input parameters
     p = inputParser;
     %custom argument checkers
@@ -319,7 +319,7 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     default.phi  = false;
     default.SR3.prox = prox_flake;
     default.SR3.nu = 1e-3;
-    default.SR3.gamma = 1;
+    %default.SR3.gamma = 1;
     default.SR3.missing_data = [];
     default.SR3.params.tolF = 1e-6;
     default.SR3.params.maxiter = 1000;
@@ -339,14 +339,18 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     default.SR3.params.paths.tensor_toolbox = [pth '/tensor_toolbox'];
     default.SR3.params.paths.rann = [pth '/RANN'];
     default.solver.f = 'pcg_preconditioned';
+    default.gamma = 1;
     addRequired(p, 'X', @(x) isnumeric(x) || isa(x, 'tensor') ||isa(x,'sptensor'));
     addOptional(p, 'phi', default.phi, @(x) isnumeric(x) || islogical(x) ||iscell(x));
     addOptional(p, 'SR3',default.SR3, @(x) isstruct(x));
+    addOptional(p, 'gamma',default.gamma, @(x) isnumeric(x));
     
     parse(p, X, varargin{:});
     
     out = p.Results;
 
+    %---- gamma ---%
+    gamma = out.gamma;
     %----parse the default struct ---- %
     SR3 = out.SR3;
     if ~isstruct(SR3)
