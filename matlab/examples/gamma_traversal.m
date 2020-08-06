@@ -6,7 +6,7 @@ load lung100
 catch
 load('/Users/mishne/Dropbox/Yale/data/coorg/lung100.mat')
 end
-matrix = lung100' / 6;
+matrix = lung100' ;
 gamma_vec = 2.^[-6:0.25:2];
 lim_lower = -6;
 lim_upper = 6;
@@ -17,6 +17,10 @@ row_labels(21:33) = 2; % colon
 row_labels(34:10) = 3;  % normal
 row_labels(51:56) = 4; % small cell
 x = matrix;
+
+x = matrix-mean(matrix(:));
+x = x ./ norm(x,'fro');
+
 
 %% SOME SR3 PARAMETERS
 maxit = 100;
@@ -34,8 +38,8 @@ SR3.params.store_updates = false; %STORE THE WHOLE GAMMA PATH - not recommended
 % we generate gammas over the simplex using ratio_between_modes(i).*magnitudes
 convexparams.Nratios = 10; % Number of ratios to traverse
 convexparams.Nmagnitudes = 10; % magnitudes to take
-convexparams.min_mag = 1; % minimum magnitudes
-convexparams.max_mag = 1e8; % maximum magnitude.  You want this to be proportional to nu.
+convexparams.min_mag = -4; % minimum magnitudes
+convexparams.max_mag = 2; % maximum magnitude.  You want this to be proportional to nu.
 %params for regular SR3
 % SR3.min_gamma = 1e-4;
 

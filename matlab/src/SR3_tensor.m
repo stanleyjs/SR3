@@ -68,7 +68,7 @@
 %
 function [SR3,phi,jj] = SR3_tensor(X, varargin)
 %   
-    [X, phi, SR3, verbose] = init_and_parse(X,varargin{:});
+    [X, phi, SR3, gamma, verbose] = init_and_parse(X,varargin{:});
     
 
     % Laplacian from input incidence
@@ -92,6 +92,9 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     end
     N = size(x,1);
     sz = size(X);
+    if length(sz)==2
+        sz(3) = 1;
+    end
     if ~isempty(SR3.missing_data)
         I = spdiags(SR3.missing_data, 0, N, N);
     else
@@ -117,7 +120,7 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
         end
         SR3.output.U{1} = remap_tensor(U0,x);
     end
-    [F0,f1,f2,f3,F_prev_mode] = objective_prox(x,U0,V0,A,SR3.nu,SR3.gamma,SR3.prox,SR3.params.epsilon);
+    [F0,f1,f2,f3,F_prev_mode] = objective_prox(x,U0,V0,A,SR3.nu,gamma,SR3.prox,SR3.params.epsilon);
     SR3.output.F = [F0 f1 f2 f3 cell2mat(F_prev_mode)];
 
     jj = 2;
@@ -128,9 +131,9 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     while go && jj < SR3.params.maxiter
         U_prev = U0;
         Fprev = F0;
-        [V0,sumV] = updateV(U0,SR3.gamma);
+        [V0,sumV] = updateV(U0,gamma);
         [U0,iter] = updateU(sumV,U_prev,solver);
-        [F0,f1,f2,f3,mode_loss] = objective_prox(x,U0,V0,A,SR3.nu,SR3.gamma,SR3.prox,SR3.params.epsilon);
+        [F0,f1,f2,f3,mode_loss] = objective_prox(x,U0,V0,A,SR3.nu,gamma,SR3.prox,SR3.params.epsilon);
         SR3.output.F = [SR3.output.F;F0 f1 f2 f3 cell2mat(mode_loss)];
         if SR3.params.store_updates
             for k = 1:modes
@@ -155,14 +158,36 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
         for k = 1:modes
             edges =size(phi{k},1);
             dimension = max(size(V0{k}))/edges;
-            SR3.output.V{k} = reshape(tensor(V0{k}), [edges,dimension]);
-            if k==2
-                SR3.output.V{k} = reshape(tensor(V0{k}), [dimension,edges])';
+            switch k
+                case 2
+                    % uij is U whose dims have been permuted to
+                    % stride x sz1 x sz3
+                    smat = modp_shuffle_permute(sz(1),edges);
+                    V0{k} = kron(eye(sz(3)),smat) * V0{k};
+                case 3
+                    % uij is U whose dims have been permuted to
+                    % stride x sz1 x sz2
+                    smat = modp_shuffle_permute(sz(1)*sz(2),edges);
+                    V0{k} = smat * V0{k};
             end
+            SR3.output.V{k} = reshape(tensor(V0{k}), [edges,dimension]);
+
+       %     if k==2
+       %         SR3.output.V{k} = reshape(tensor(V0{k}), [dimension,edges])';
+       %     end
         end
     end
+%     figure;
+%     subplot(222);imagesc(double(SR3.output.V{2}));colorbar;colormap gray
+%     subplot(221);imagesc(double(SR3.output.V{1}));colorbar;colormap gray
+%     subplot(224);imagesc(double(SR3.output.V{2})==0);colorbar;colormap gray
+%     subplot(223);imagesc(double(SR3.output.V{1})==0);colorbar;colormap gray
+%     drawnow
+%     figure;
+%     imagesc(double(SR3.output.U));colormap(gray)
+%     drawnow
     if verbose
-        fprintf([' ***** \n SR3 halted after %i total iterations\n'],jj) 
+        fprintf([' ***** \n SR3 halted after %i total iterations\n'],jj)
     end
 
     function [U,iter] = updateU(sumV,Uprev,solve)
@@ -190,12 +215,32 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
             v{c} = uij;
             stride = size(phi{c},1);
             otherdim = max(size(uij))/stride;
-
+            
+            if c == 2
+                % uij is U whose dims have been permuted to
+                % stride x sz1 x sz3
+                smat = modp_shuffle_permute(sz(1),stride);
+                uij = kron(eye(sz(3)),smat)*uij;
+            elseif c == 3
+                % uij is U whose dims have been permuted to
+                % stride x sz1 x sz2
+                smat = modp_shuffle_permute(sz(1)*sz(2),stride);
+                uij = smat *uij;
+            end
+                
             uij = reshape(tensor(uij), [stride,otherdim]);
-            temp = vecnorm(double(uij)');
-            temp = SR3.proxfun(temp,gam(c),SR3.params.epsilon)./temp;
-
-            v{c}(1:end) = v{c}(1:end).*repmat(temp,1,otherdim)';
+            temp = vecnorm(double(uij)');     
+            temp = (SR3.proxfun(temp,gam(c),SR3.params.epsilon)./temp)';
+            
+            switch c
+                case 1
+                    temp = kron(ones(otherdim,1),temp);
+                case 2
+                    temp = kron(kron(temp,ones(sz(3),1)),ones(sz(1),1));
+                case 3
+                    temp = kron(temp,ones(otherdim,1));
+            end
+            v{c}(1:end) = v{c}(1:end).*temp;
             sumV = sumV+ A{c}'*v{c};
         end
         V = v;
@@ -260,7 +305,7 @@ function x = partial_legendre(mat, b, order, coeffs, psi, lambda,nu)
     borth_approx = matvecleg(mat,borth,order,coeffs);
     x = (psi*Htaps_bproj)+borth_approx;
 end
-function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
+function [X, phi, SR3, gamma, verbose] = init_and_parse(X,varargin)
     %collate and parse input parameters
     p = inputParser;
     %custom argument checkers
@@ -274,7 +319,7 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     default.phi  = false;
     default.SR3.prox = prox_flake;
     default.SR3.nu = 1e-3;
-    default.SR3.gamma = 1;
+    %default.SR3.gamma = 1;
     default.SR3.missing_data = [];
     default.SR3.params.tolF = 1e-6;
     default.SR3.params.maxiter = 1000;
@@ -294,14 +339,18 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     default.SR3.params.paths.tensor_toolbox = [pth '/tensor_toolbox'];
     default.SR3.params.paths.rann = [pth '/RANN'];
     default.solver.f = 'pcg_preconditioned';
+    default.gamma = 1;
     addRequired(p, 'X', @(x) isnumeric(x) || isa(x, 'tensor') ||isa(x,'sptensor'));
     addOptional(p, 'phi', default.phi, @(x) isnumeric(x) || islogical(x) ||iscell(x));
     addOptional(p, 'SR3',default.SR3, @(x) isstruct(x));
+    addOptional(p, 'gamma',default.gamma, @(x) isnumeric(x));
     
     parse(p, X, varargin{:});
     
     out = p.Results;
 
+    %---- gamma ---%
+    gamma = out.gamma;
     %----parse the default struct ---- %
     SR3 = out.SR3;
     if ~isstruct(SR3)
@@ -321,7 +370,11 @@ function [X, phi, SR3,verbose] = init_and_parse(X,varargin)
     else
         warning('off','all')
     end
-    X = sparse_or_dense_tensor(X, false, SR3.params.paths.tensor_toolbox);
+    %%%%%%%% bug with spten - disabling for now
+    %X = sparse_or_dense_tensor(X, false, SR3.params.paths.tensor_toolbox);
+    %%%%%%%%%%
+    X = tensor(X);
+    sp = false;
     %-----Graph building------%
     if ~iscell(out.phi) % compute a knn graph over X.
         dims = size(X);
@@ -408,3 +461,23 @@ function A = remap_tensor(a,b)
     %remap a such that it is a tensor the same shape as b was derived from
     A = tensor(tenmat(a,b.rdims,b.cdims,b.tsize));
 end
+
+function mat = modp_shuffle_permute(p,r)
+    inds = (reshape(1:p*r,p,r))';
+    I = speye(p*r);
+    mat = I(inds,:);
+    
+%     test    
+%     p = 5;
+%     r = 3;
+%     A = rand(p,r);
+%     
+%     inds = (reshape(1:p*r,p,r))';
+%     I = eye(p*r);
+%     mat = I(inds,:);
+%     B = reshape(mat*A(:),r,p);
+%     max(max(abs(B - transpose(A))))
+    
+end
+
+

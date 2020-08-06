@@ -1,12 +1,13 @@
 %% A DEMO OF HOW A SIMPLEX GAMMA TRAVERSAL IS COMPUTED
 % OUTPUT DOCUMENTATION IN THE BOTTOM
-close all; clear;
+close all; clear;clc;
 %try
 %load lung500
 %catch
-load('/Users/mishne/Dropbox/Yale/data/coorg/lung500.mat')
+%load('/Users/mishne/Documents/Yale/github/SR3/matlab/examples/data/lung100.mat')
+load('./data/lung100.mat')
 %end
-matrix = lung500;
+matrix = lung100;
 gamma_vec = 2.^[-6:0.25:2];
 lim_lower = -6;
 lim_upper = 6;
@@ -17,14 +18,34 @@ row_labels(21:33) = 2; % colon
 row_labels(34:10) = 3;  % normal
 row_labels(51:56) = 4; % small cell
 
-% [matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
+%[matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
 x = matrix;
-
+%x = x - mean(x(:));
+%%
+dataset = 1;
+switch dataset
+    case 1
+        load('/home/gal/Documents/data/Data_depol.mat')
+        x = data_3d_no_missing_depol;
+        x=x/4;
+        %x = x(:,:,1);
+    case 2
+        load('/home/gal/Documents/data/D10_3d.mat')
+        x = data;
+        
+        x = reshape(x,size(x,1),[]);
+        x = zscore(x,0,2);
+        x = reshape(x,size(x,1),[],59);
+        
+    case 3
+        load('/home/gal/Documents/data/traffic3d.mat')
+        x = Z;
+end
 %% SOME SR3 PARAMETERS
 maxit = 100;
-knn = [10,10];
+knn = 5 * ones(1,ndims(x));
 clear SR3
-SR3.params.tolF = 1e-8;
+SR3.params.tolF = 1e-6;
 SR3.params.pcg_stop = false; %BUG? true is equivalent to maxit = 1!
 %Right now pcg_stop = true stops the algorithm after the first PCG iteration.
 % The intention was to stop when pcg hits some convergence setting.
@@ -43,9 +64,15 @@ convexparams.max_mag = 2; % maximum magnitude.  You want this to be proportional
 
 SR3.nu = 1e-6;
 [phi] = tensor_graph(x,knn);
+[L,A] = tensor_incidence(phi,false);
 
+SR3.params.epsilon = 1;
+%%
+gammas = maxgamma(L,A,phi,x,SR3.nu,SR3.params.epsilon);
+%%
+tic
 [SR3,gammas,ratios,magnitudes] = SR3_simplex2(x, phi,convexparams,SR3);
-
+toc
 %% The scales are stored ratio-wise in SR3{}
 % for i=1:convexparams.Nratios
 % SR3{i} (where i is the index of the scale) has fields
@@ -106,8 +133,8 @@ for i =1:length(vk)
     mc=(bsxfun(@times,~vecnorm(double(vk{1,i}{1,2}),2,2),double(phi{2, 1})));
     Lc = mc'*mc;
     
-    mr=(bsxfun(@times,~vecnorm(double(vk{1,i}{1,1}),2,2)',double(phi{1, 1})'));
-    Lr = mr*mr';
+    mr=(bsxfun(@times,~vecnorm(double(vk{1,i}{1,1}),2,2),double(phi{1, 1})));
+    Lr = mr'*mr;
     
     G_r = graph(Lr);
     cc_rows = conncomp(G_r);
@@ -121,9 +148,17 @@ end
 row_dist = zeros(n_rows);
 col_dist = zeros(n_cols);
 alpha = -0.5;
+
+%%%%% bug below, x doesn't change, metric isn't chanigng  
+
 for i = 2:length(nP_c)
-    gamma_c = SR3.output.gammas{i}(2);  
-    gamma_r = SR3.output.gammas{i}(1);  
+    gamma_c = gammas_sr3(i,2);  
+    gamma_r = gammas_sr3(i,1);  
+    
+    if gamma_r==0 || gamma_c ==0
+        continue
+    end
+    
     if (nP_c(i) > 1 && nP_c(i) < n_cols && nP_c(i-1) ~= nP_c(i)) || ...
             (nP_r(i) > 1 && nP_r(i) < n_rows && nP_r(i-1) ~= nP_r(i))
         row_dist  = row_dist + ...
@@ -139,17 +174,21 @@ aff_mat_row = exp(-row_dist.^2 / eps.^2);
 
 eps     = median(col_dist(:));
 aff_mat_col = exp(-col_dist.^2 / eps.^2);
-1
-[ vecs, vals ] = CalcEigs( aff_mat_row, 4 );
-      proxfun: @flakeprox
-embedding_rows = vecs*vals;
-[ vecs, vals ] = CalcEigs( aff_mat_col, 4 );
-embedding_cols = vecs*vals;
+
+% [ vecs, vals ] = CalcEigs( aff_mat_row, 4 );
+% embedding_rows = vecs*vals;
+% [ vecs, vals ] = CalcEigs( aff_mat_col, 4 );
+% embedding_cols = vecs*vals;
+
+embedding_rows = calcDiffusionMap(aff_mat_row)';
+embedding_cols = calcDiffusionMap(aff_mat_col)';
+
 %%
-figure;scatter3(embedding_rows(:,1),embedding_rows(:,2),embedding_rows(:,3),50,row_labels,'filled')
+figure;scatter3(embedding_rows(:,1),embedding_rows(:,2),embedding_rows(:,3),50,1:n_rows,'filled')
 figure;scatter3(embedding_cols(:,1),embedding_cols(:,2),embedding_cols(:,3),50,1:n_cols,'filled')
 
 %%
+figure
 clear nuk
 t = double(uk{end});
 t = t(1:end-1,:);
@@ -164,5 +203,15 @@ for i=1:1:numel(uk)
     nuk{i} = t;
 end
 filename = './lung_fixed.gif';
+f = cell2imgif(nuk,filename, false, 0.1, 1,true,false);
 
-
+return;
+%%
+figure;pause(3)
+for i=1:100
+    
+    subplot(121);imagesc(double(vk{1, i}{1,2}  ));colorbar;
+    title(sprintf('gamma_r=%1.2f, gamma_c = %1.2f',gammas(i,1),gammas(i,2)))
+    subplot(122);imagesc(double(vk{1, i}{1,1}  ));colorbar;
+    pause(0.5);
+end

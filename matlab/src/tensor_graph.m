@@ -18,7 +18,13 @@ function [Phi] = tensor_graph(X,kNN,params)
     if params.approx
         check_rann(params.paths.rann);
     end
-    [X,sp] = sparse_or_dense_tensor(X,false,params.paths.tensor_toolbox);
+    
+    %%%%%%%% bug with spten - disabling for now
+    %X = sparse_or_dense_tensor(X, false, SR3.params.paths.tensor_toolbox);
+    %%%%%%%%%%
+    X = tensor(X);
+    sp = false;
+    
     if sp
         matfun = @(x,c) sptenmat(x,c);
     else
