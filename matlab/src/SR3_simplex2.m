@@ -1,11 +1,12 @@
 function [output, gammas, ratios, magnitudes] = SR3_simplex2(X, varargin)
     [X,phi,convexparams,SR3,verbose] = init_and_parse(X,varargin{:});
     Nratios = convexparams.Nratios;
-    [gammas,ratios,magnitudes] = convexratios(convexparams.dims,Nratios,convexparams.Nmagnitudes,convexparams.min_mag, convexparams.max_mag);
+    [gammas,ratios,magnitudes] = convexratios2(convexparams.dims,...
+        convexparams.max_gamma,Nratios,convexparams.Nmagnitudes,convexparams.min_mag,convexparams.max_mag);
     gt_ratios = unique(ratios,'rows');
     output = struct();
     
-    gt_ratios = gt_ratios(all(gt_ratios>0,2),:);
+    gt_ratios = gt_ratios(any(gt_ratios>0,2),:);
     
     % init output strcut to correct size
     n_iters = size(gt_ratios,1);

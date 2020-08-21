@@ -70,7 +70,8 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
 %   
     [X, phi, SR3, gamma, verbose] = init_and_parse(X,varargin{:});
     
-
+    SR3.gamma = gamma ./ sqrt(size(X));
+    
     % Laplacian from input incidence
     if verbose
         fprintf('Computing Laplacian \n')
@@ -104,14 +105,28 @@ function [SR3,phi,jj] = SR3_tensor(X, varargin)
     
     solver = design_solver(L, I, SR3.nu, SR3.solver, verbose,lmin,lmax,phi);
 
-    sumV = 0;
-    V0 = {};
-    for k = 1:modes
-
-        V0{k} = A{k}*x;
-        sumV = sumV + double(A{k}'*V0{k});
+    if isempty(SR3.V0)
+        sumV = 0;
+        V0 = {};
+        for k = 1:modes
+            
+            V0{k} = A{k}*x;
+            sumV = sumV + double(A{k}'*V0{k});
+        end
+    else
+        sumV = 0;
+        V0 = {};
+        for k = 1:modes
+            V0{k} = tenmat(SR3.V0{k},1:modes);
+            sumV = sumV + double(A{k}'*V0{k});
+        end
     end
-    U0 = double(x);%updateU(sumV, x);
+    
+    if ~isempty(SR3.U0)
+        U0  = double(tenmat(SR3.U0,1:modes));
+    else
+        U0 = double(x);%updateU(sumV, x);
+    end
     if SR3.params.store_updates
         for k = 1:modes
             edges =size(phi{k},1);
@@ -321,6 +336,8 @@ function [X, phi, SR3, gamma, verbose] = init_and_parse(X,varargin)
     default.SR3.nu = 1e-3;
     %default.SR3.gamma = 1;
     default.SR3.missing_data = [];
+    default.SR3.U0 = [];
+    default.SR3.V0 = [];
     default.SR3.params.tolF = 1e-6;
     default.SR3.params.maxiter = 1000;
     default.SR3.params.epsilon = 1e-8;
@@ -471,7 +488,6 @@ function mat = modp_shuffle_permute(p,r)
 %     p = 5;
 %     r = 3;
 %     A = rand(p,r);
-%     
 %     inds = (reshape(1:p*r,p,r))';
 %     I = eye(p*r);
 %     mat = I(inds,:);

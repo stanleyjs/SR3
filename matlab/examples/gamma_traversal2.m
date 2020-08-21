@@ -1,28 +1,13 @@
 %% A DEMO OF HOW A SIMPLEX GAMMA TRAVERSAL IS COMPUTED
 % OUTPUT DOCUMENTATION IN THE BOTTOM
-close all; clear;clc;
+%close all; 
+clear;clc;
 %try
 %load lung500
 %catch
-%load('/Users/mishne/Documents/Yale/github/SR3/matlab/examples/data/lung100.mat')
-load('./data/lung100.mat')
-%end
-matrix = lung100;
-gamma_vec = 2.^[-6:0.25:2];
-lim_lower = -6;
-lim_upper = 6;
-kNN = 10;
-row_labels = zeros(1,56);
-row_labels(1:20) = 1;    % carcinoid
-row_labels(21:33) = 2; % colon
-row_labels(34:10) = 3;  % normal
-row_labels(51:56) = 4; % small cell
 
-%[matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
-x = matrix;
-%x = x - mean(x(:));
 %%
-dataset = 1;
+dataset = 4;
 switch dataset
     case 1
         load('/home/gal/Documents/data/Data_depol.mat')
@@ -40,7 +25,30 @@ switch dataset
     case 3
         load('/home/gal/Documents/data/traffic3d.mat')
         x = Z;
+    case 4
+        %load('/Users/mishne/Documents/Yale/github/SR3/matlab/examples/data/lung100.mat')
+        load('./data/lung100.mat')
+        %end
+        matrix = lung100;
+        gamma_vec = 2.^[-6:0.25:2];
+        lim_lower = -6;
+        lim_upper = 6;
+        kNN = 10;
+        row_labels = zeros(1,56);
+        row_labels(1:20) = 1;    % carcinoid
+        row_labels(21:33) = 2; % colon
+        row_labels(34:10) = 3;  % normal
+        row_labels(51:56) = 4; % small cell
+        
+        %[matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
+        x = matrix;
+        %x = x - mean(x(:));
 end
+
+[matrix, gamma_vec, kNN, col_labels, row_labels] = load_data('checker');
+x = matrix;
+[n_rows,n_cols,n_t] = size(x);
+
 %% SOME SR3 PARAMETERS
 maxit = 100;
 knn = 5 * ones(1,ndims(x));
@@ -51,7 +59,7 @@ SR3.params.pcg_stop = false; %BUG? true is equivalent to maxit = 1!
 % The intention was to stop when pcg hits some convergence setting.
 
 SR3.params.maxiter = maxit; %the time spent for a single SR3_tensor (scale) calls
-SR3.params.verbose = true;
+SR3.params.verbose = false;
 SR3.params.epsilon = 1e-8;
 SR3.params.store_updates = false; %STORE THE WHOLE GAMMA PATH - not recommended
 % we generate gammas over the simplex using ratio_between_modes(i).*magnitudes
@@ -61,14 +69,38 @@ convexparams.min_mag = -3; % minimum magnitudes
 convexparams.max_mag = 2; % maximum magnitude.  You want this to be proportional to nu.
 %params for regular SR3
 % SR3.min_gamma = 1e-4;
-
 SR3.nu = 1e-6;
+
+% using oracle graph
 [phi] = tensor_graph(x,knn);
 [L,A] = tensor_incidence(phi,false);
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+do_missing = true;
+if do_missing
+    mask           = true( size( x ) );
+    zerosNum       = 0.4;
+    permVec        = randperm( n_rows * n_cols, round(  n_rows * n_cols * zerosNum) );
+    mask( permVec) = false;
+    mask(isnan(x(:))) = false;
+    x              = mask .* x;
+    x(~mask(:)) = mean(x(mask(:)));
+    SR3.missing_data = mask(:);
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 SR3.params.epsilon = 1;
 %%
-gammas = maxgamma(L,A,phi,x,SR3.nu,SR3.params.epsilon);
+% convexparams.max_gamma = maxgamma(L,A,phi,x,SR3.nu,SR3.params.epsilon);
+% convexparams.max_gamma = min(convexparams.max_gamma) * ones(size(convexparams.max_gamma));
+[convexparams.max_gamma, convexparams.min_gamma] = maxgamma2(x,phi,SR3,2^-4);
+convexparams.min_mag = floor(log2(min(convexparams.min_gamma))) - floor(log2(max(convexparams.max_gamma)));
+%convexparams.min_mag = min(convexparams.min_gamma);
+%convexparams.max_mag = 1;
+
+
 %%
 tic
 [SR3,gammas,ratios,magnitudes] = SR3_simplex2(x, phi,convexparams,SR3);
@@ -120,7 +152,9 @@ gammas_sr3 = [gammas_sr3(:,1:2:end), gammas_sr3(:,2:2:end)];
 gammas_sr3 =reshape(gammas_sr3,[],2);
 %%
 nP_c = zeros(length(vk),1);
-nP_r = zeros(length(vk),1);%Fusion Clustering Using Folded-Concave Penalties
+nP_r = zeros(length(vk),1); % Fusion Clustering Using Folded-Concave Penalties
+cc_cols = zeros(length(vk),size(x,2));
+cc_rows = zeros(length(vk),size(x,1));
 
 for i =1:length(vk)
     
@@ -137,34 +171,55 @@ for i =1:length(vk)
     Lr = mr'*mr;
     
     G_r = graph(Lr);
-    cc_rows = conncomp(G_r);
+    cc_rows(i,:) = conncomp(G_r);
     G_c = graph(Lc);
-    cc_cols = conncomp(G_c);
-    nP_c(i) = max(cc_cols);
-    nP_r(i) = max(cc_rows);
+    cc_cols(i,:) = conncomp(G_c);
 end
+
+nP_c = max(cc_cols,[],2);
+nP_r = max(cc_rows,[],2);
+
 %%
-[n_rows,n_cols] = size(x);
+
+% only run over unique clustering assignments for metric calculation 
+[~,row_inds,~] = unique(cc_rows,'rows');
+[~,col_inds,~] = unique(cc_cols,'rows');
+
+emd_inds = union(row_inds,col_inds);
+
 row_dist = zeros(n_rows);
 col_dist = zeros(n_cols);
 alpha = -0.5;
-
-%%%%% bug below, x doesn't change, metric isn't chanigng  
-
-for i = 2:length(nP_c)
-    gamma_c = gammas_sr3(i,2);  
+for i = emd_inds'
+    gamma_c = gammas_sr3(i,2);
     gamma_r = gammas_sr3(i,1);  
     
     if gamma_r==0 || gamma_c ==0
         continue
     end
     
-    if (nP_c(i) > 1 && nP_c(i) < n_cols && nP_c(i-1) ~= nP_c(i)) || ...
-            (nP_r(i) > 1 && nP_r(i) < n_rows && nP_r(i-1) ~= nP_r(i))
+%    if (nP_c(i) > 1 && nP_c(i) < n_cols && nP_c(i-1) ~= nP_c(i)) || ...
+ %           (nP_r(i) > 1 && nP_r(i) < n_rows && nP_r(i-1) ~= nP_r(i))
+    if ((nP_c(i) > 1 && nP_c(i) < n_cols) || (nP_r(i) > 1 && nP_r(i) < n_rows))     
+        %x_smooth = calculate_averaging_matrix(x, [nP_r(i), nP_c(i)], {cc_rows(i,:), cc_cols(i,:)});
+        %SR3.missing_data
+        
+        x_smooth = double(uk{i});
+        if  isfield(SR3,'missing_data')
+            x_smooth(SR3.missing_data(:)) = x(SR3.missing_data(:));
+        end
+        
+        figure;
+        subplot(121);imagesc(x_smooth);
+        axis image;title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
+        colorbar
+        subplot(122);imagesc(abs(x_smooth-x));axis image;
+        colorbar
+        drawnow
         row_dist  = row_dist + ...
-            (gamma_c*gamma_r).^(alpha) * squareform(pdist(x,'euclidean'));
+            (gamma_c*gamma_r).^(alpha) * squareform(pdist(x_smooth,'euclidean'));
         col_dist =  col_dist + ...;
-            (gamma_c*gamma_r).^(alpha) * squareform(pdist(x','euclidean'));
+            (gamma_c*gamma_r).^(alpha) * squareform(pdist(x_smooth','euclidean'));
         
     end
 end
@@ -184,9 +239,23 @@ embedding_rows = calcDiffusionMap(aff_mat_row)';
 embedding_cols = calcDiffusionMap(aff_mat_col)';
 
 %%
-figure;scatter3(embedding_rows(:,1),embedding_rows(:,2),embedding_rows(:,3),50,1:n_rows,'filled')
-figure;scatter3(embedding_cols(:,1),embedding_cols(:,2),embedding_cols(:,3),50,1:n_cols,'filled')
-
+figure;
+subplot(221);imagesc(aff_mat_row);axis image
+subplot(222);imagesc(aff_mat_col);axis image
+subplot(223)
+scatter3(embedding_rows(:,1),embedding_rows(:,2),embedding_rows(:,3),50,1:n_rows,'filled')
+title('Embedding rows')
+subplot(224)
+scatter3(embedding_cols(:,1),embedding_cols(:,2),embedding_cols(:,3),50,1:n_cols,'filled')
+title('Embedding cols')
+%%
+figure;
+subplot(121);scatter(gammas(:,1),gammas(:,2),50,nP_r,'filled')
+subplot(122);scatter(gammas(:,1),gammas(:,2),50,nP_c,'filled')
+colormap jet
+clsuters=[gammas, nP_r, nP_c];
+%%
+return
 %%
 figure
 clear nuk
