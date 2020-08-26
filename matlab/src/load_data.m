@@ -1,4 +1,4 @@
-function [matrix, gamma_vec, kNN, col_labels, row_labels] = load_data(dataset)
+function [matrix, gamma_vec, kNN, col_labels, row_labels, origPts] = load_data(dataset)
 %%
 if nargin < 1
     dataset = 'checker';%'mmpi';
@@ -6,6 +6,7 @@ end
 
 col_labels = [];
 row_labels = [];
+origPts    = [];
 switch dataset
     %%
     case 'checker'
@@ -15,7 +16,7 @@ switch dataset
         lim_lower = 0;
         lim_upper = 1.5;
         kNN = 16;
-        matrix = matrix + 0.1*rand(size(matrix));
+        matrix = matrix + 0.001*rand(size(matrix));
          %%
     case 'harmonic'
         n_rows = 200;
@@ -58,9 +59,11 @@ switch dataset
         matrix = matrix(:,sortI);
     case 'lung100'
         %%
-
-        load('lung100.mat')
-
+        if ismac
+            load('/Users/mishne/Dropbox/Yale/data/coorg/lung100.mat')
+        elseif isunix
+            load('/data/Gal/coorg/lung100.mat')
+        end
         matrix = lung100' / 6;
         gamma_vec = 2.^[-4:1:2];
         lim_lower = -6;
@@ -121,6 +124,8 @@ switch dataset
         kNN = 16;
         col_labels = Y(1,:);
         row_labels = t;
+        origPts.rows = Xpoints;
+        origPts.cols = Y;
     case 'potential3'
         t = 0:0.1:pi*6;
         x = 0.5+0.5*cos(t);
@@ -138,6 +143,8 @@ switch dataset
         lim_upper = 2;
         kNN = 16;
         col_labels = Y(1,:);
+        origPts.rows = Xpoints;
+        origPts.cols = Y;
     case 'potential2'
                 %%
         mu1 = [0 0 0;-1 1 0.5;1 1 1];
@@ -160,6 +167,8 @@ switch dataset
         kNN = 16;
         col_labels = Y(1,:);
         row_labels = idx(sorted);
+        origPts.rows = Xpoints;
+        origPts.cols = Y;
     case 'potential2_fix'
                 %%
         mu1 = [0 0 0;-1 1 0.5;1 1 1];
@@ -182,7 +191,54 @@ switch dataset
         kNN = 16;
         col_labels = Y(1,:);
         row_labels = idx(sorted);
+    case 'TCGA'
+        load('/data/Gal/coorg/brca547.mat')
+        matrix = TCGA500'/4;
+        gamma_vec = 2.^[-4:1:2];
+        kNN = 10;
+        [labels,~,row_labels]=unique(points_dat.PAM50);
+        col_labels = 1:500;
+    case 'mnist1'
+        load('/data/Gal/coorg/mnist.mat')
+        matrix = double(mnist034);
+        matrix(:,sum(matrix)==0) = [];
+        matrix = matrix (1:3:end,:)/255;
+        gamma_vec = 2.^[-4:1:2];
+        kNN = 10;
+        row_labels = labels034(1:3:end);
+        col_labels = 1:size(matrix,2);
+    case 'mnist2'
+        load('/data/Gal/coorg/mnist.mat')
+        matrix = double(mnist358);
+        matrix(:,sum(matrix)==0) = [];
+        matrix = matrix (1:3:end,:)/255;
         
+        matrix=bsxfun(@minus,matrix,mean(matrix));
+        matrix=bsxfun(@times,matrix,1./std(matrix));
+        
+        gamma_vec = 2.^[-4:1:2];
+        kNN = 10;
+        row_labels = labels358(1:3:end);
+        col_labels = 1:size(matrix,2);
+    case 'mouse'
+        load('/data/Gal/coorg/mouse_expression.mat');
+        row_labels = class_id;
+        mean_cols = nanmean(matrix);
+        std_cols = nanstd(matrix);
+        matrix = bsxfun(@minus,matrix,mean_cols);
+        matrix = bsxfun(@rdivide,matrix,std_cols);
+       col_labels = 1:size(matrix,2);
+       kNN = 7;
+       gamma_vec = 2.^[-4:1:2];
+    case 'voice'
+       load('/data/Gal/coorg/LSVT.mat');
+        mean_cols = nanmean(matrix);
+        std_cols = nanstd(matrix);
+        matrix = bsxfun(@minus,matrix,mean_cols);
+        matrix = bsxfun(@rdivide,matrix,std_cols);
+       col_labels = 1:size(matrix,2);
+       kNN = 7;
+       gamma_vec = 2.^[-4:1:2];
 end
 % figure;scatter3(Xpoints(1,:),Xpoints(2,:),Xpoints(3,:),30,(1:189)/189,'filled');hold on; scatter3(Y(1,:),Y(2,:),Y(3,:),30,(Y(1,:)+1)/2,'filled');colormap jet
 % figure;scatter3(Xpoints(1,:),Xpoints(2,:),Xpoints(3,:),30,idx(sorted)/3,'filled');hold on; scatter3(Y(1,:),Y(2,:),Y(3,:),30,(Y(1,:)+1)/2,'filled');colormap jet
