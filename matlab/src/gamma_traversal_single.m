@@ -1,4 +1,4 @@
-function [embedding_rows, embedding_cols, gammas_sr3, emd_inds] = ...
+function [embedding_rows, embedding_cols, gammas_sr3, emd_inds,uk, vk ] = ...
             gamma_traversal_single(x,x_orig,mask,gamma_init,knn,params)
         
 [n_rows,n_cols,~] = size(x);
@@ -146,9 +146,9 @@ for i = emd_inds'
     gamma_c = gammas_sr3(i,2);
     gamma_r = gammas_sr3(i,1);  
     
-    if gamma_r==0 || gamma_c ==0
-        continue
-    end
+    %if gamma_r==0 || gamma_c ==0
+    %    continue
+    %end
     
 %    if (nP_c(i) > 1 && nP_c(i) < n_cols && nP_c(i-1) ~= nP_c(i)) || ...
  %           (nP_r(i) > 1 && nP_r(i) < n_rows && nP_r(i-1) ~= nP_r(i))
@@ -156,22 +156,32 @@ for i = emd_inds'
         %x_smooth = calculate_averaging_matrix(x, [nP_r(i), nP_c(i)], {cc_rows(i,:), cc_cols(i,:)});
         %SR3.missing_data
         
+        % use U to initialize x_tilde
         x_smooth = double(uk{i});
-        if  isfield(SR3,'missing_data')
-            x_smooth(SR3.missing_data(:)) = x(SR3.missing_data(:));
-        end
+        % fill x_tilde with orig vals in non-missing entries
         
-%         figure;
-%         subplot(121);imagesc(x_smooth);
-%         axis image;title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
-%         colorbar
-%         subplot(122);imagesc(abs(x_smooth-x));axis image;
-%         colorbar
-%         drawnow
+         x_smooth(mask(:)) = x(mask(:));
+        
+        
+        figure;
+        subplot(131);imagesc(x_smooth,[-0.1 1.2]);
+        %axis image;
+        title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
+        colorbar
+        colormap jet
+        subplot(132);imagesc( double(uk{i}));
+        %axis image;
+        title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
+        colorbar
+        colormap jet
+        subplot(133);imagesc(abs(x_smooth-x));
+        colorbar
+        colormap jet
+        drawnow
         row_dist  = row_dist + ...
-            (gamma_c*gamma_r).^(alpha) * squareform(pdist(x_smooth,'euclidean'));
+            (gamma_c+gamma_r).^(alpha) * squareform(pdist(x_smooth,'euclidean'));
         col_dist =  col_dist + ...;
-            (gamma_c*gamma_r).^(alpha) * squareform(pdist(x_smooth','euclidean'));
+            (gamma_c+gamma_r).^(alpha) * squareform(pdist(x_smooth','euclidean'));
         
     end
 end
@@ -192,7 +202,7 @@ embedding_rows = vecs*vals;
 [ vecs, vals ] = CalcEigs( aff_mat_col, params.nEigs );
 embedding_cols = vecs*vals;
 
-return
+
 %%
 figure;
 subplot(221);imagesc(aff_mat_row);axis image
@@ -203,6 +213,10 @@ title('Embedding rows')
 subplot(224)
 scatter3(embedding_cols(:,1),embedding_cols(:,2),embedding_cols(:,3),50,1:n_cols,'filled')
 title('Embedding cols')
+
+saveas(gcf,sprintf('sr3_inpaint_%s_missing_%d_embed.png',params.dataset,params.p))
+
+return
 %%
 figure;
 subplot(121);scatter(gammas(:,1),gammas(:,2),50,nP_r,'filled')
