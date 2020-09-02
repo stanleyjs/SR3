@@ -1,4 +1,4 @@
-function [embedding_rows, embedding_cols, gammas_sr3, emd_inds] = ...
+function [embedding_rows, embedding_cols, gammas_sr3, emd_inds,uk, vk ] = ...
             gamma_traversal_single(x,x_orig,mask,gamma_init,knn,params)
         
 [n_rows,n_cols,~] = size(x);
@@ -156,7 +156,9 @@ for i = emd_inds'
         %x_smooth = calculate_averaging_matrix(x, [nP_r(i), nP_c(i)], {cc_rows(i,:), cc_cols(i,:)});
         %SR3.missing_data
         
+        % use U to initialize x_tilde
         x_smooth = double(uk{i});
+        % fill x_tilde with orig vals in non-missing entries
         x_smooth(mask(:)) = x(mask(:));
                 
         figure;
@@ -170,6 +172,7 @@ for i = emd_inds'
         colorbar
         subplot(133);imagesc(abs(x_smooth-x));
         colorbar
+
         drawnow
         row_dist  = row_dist + ...
             (gamma_c+gamma_r).^(alpha) * squareform(pdist(x_smooth,'euclidean'));
@@ -205,6 +208,8 @@ title('Embedding rows')
 subplot(224)
 scatter3(embedding_cols(:,1),embedding_cols(:,2),embedding_cols(:,3),50,1:n_cols,'filled')
 title('Embedding cols')
+
+saveas(gcf,sprintf('sr3_inpaint_%s_missing_%d_embed.png',params.dataset,params.p))
 
 return
 %%
