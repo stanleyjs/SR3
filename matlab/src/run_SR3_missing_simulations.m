@@ -40,6 +40,8 @@ for i = 1:n_rand
             missing_data_matrix(dataset,params,ppp);
         %row_labels(row_labels == 0) =10;
         %mask(isnan(X(:))) = false;
+        %X(isnan(X(:))) = mean(X(~isnan(X)));
+
         X(~mask) = mean(X(mask));
         [n_clusters]   = length(unique(row_labels));
         params.nEigs   = n_clusters+1;

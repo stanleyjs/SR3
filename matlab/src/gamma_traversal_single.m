@@ -146,9 +146,9 @@ for i = emd_inds'
     gamma_c = gammas_sr3(i,2);
     gamma_r = gammas_sr3(i,1);  
     
-    %if gamma_r==0 || gamma_c ==0
-    %    continue
-    %end
+%     if gamma_r==0 || gamma_c ==0
+%         continue
+%     end
     
 %    if (nP_c(i) > 1 && nP_c(i) < n_cols && nP_c(i-1) ~= nP_c(i)) || ...
  %           (nP_r(i) > 1 && nP_r(i) < n_rows && nP_r(i-1) ~= nP_r(i))
@@ -159,25 +159,26 @@ for i = emd_inds'
         % use U to initialize x_tilde
         x_smooth = double(uk{i});
         % fill x_tilde with orig vals in non-missing entries
-        
          x_smooth(mask(:)) = x(mask(:));
         
-        
-%         figure;
-%         subplot(131);imagesc(x_smooth,[-0.1 1.2]);
-%         %axis image;
-%         title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
-%         colorbar
-%         colormap jet
-%         subplot(132);imagesc( double(uk{i}));
-%         %axis image;
-%         title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
-%         colorbar
-%         colormap jet
-%         subplot(133);imagesc(abs(x_smooth-x));
-%         colorbar
-%         colormap jet
-%         drawnow
+        if 0 % don't plot
+        figure;
+        subplot(131);imagesc(x_smooth,[-0.1 1.2]);
+        %axis image;
+        title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
+        colorbar
+        colormap jet
+        subplot(132);imagesc( double(uk{i}));
+        %axis image;
+        title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
+        colorbar
+        colormap jet
+        subplot(133);imagesc(abs(x_smooth-x));
+        colorbar
+        colormap jet
+        drawnow
+        end
+
         row_dist  = row_dist + ...
             (gamma_c+gamma_r).^(alpha) * squareform(pdist(x_smooth,'euclidean'));
         col_dist =  col_dist + ...;
@@ -201,7 +202,6 @@ aff_mat_col = exp(-col_dist.^2 / eps.^2);
 embedding_rows = vecs*vals;
 [ vecs, vals ] = CalcEigs( aff_mat_col, params.nEigs );
 embedding_cols = vecs*vals;
-
 
 %%
 figure;
