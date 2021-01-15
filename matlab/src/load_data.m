@@ -78,7 +78,7 @@ switch dataset
         if ismac
             load('/Users/mishne/Dropbox/Yale/data/coorg/lung500.mat')
         elseif isunix
-            load('/data/Gal/coorg/lung500.mat')
+            load('lung500.mat')
         end
         matrix = lung500' / 6;
         gamma_vec = 2.^[-4:1:2];
