@@ -44,7 +44,7 @@ function [Phi] = tensor_graph(X,kNN,params)
             params.adaptive = paramsbak.adaptive(ell); 
             params.thresh = paramsbak.thresh(ell);
         end
-        [phi] = calculate_knn_graph2(double(mode_ell_matrix), params);
+        [phi] = calculate_knn_graph(double(mode_ell_matrix), params);
         %[~,phi] = calculate_knn_graph2(double(mode_ell_matrix), params.k);
         Phi{ell} = phi;
     end

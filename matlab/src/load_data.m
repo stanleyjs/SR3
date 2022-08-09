@@ -76,7 +76,7 @@ switch dataset
         row_labels(51:56) = 4; % small cell
     case 'lung500'
         if ismac
-            load('/Users/mishne/Dropbox/Yale/data/coorg/lung500.mat')
+            load('lung500.mat')
         elseif isunix
             load('/data/Gal/coorg/lung500.mat')
         end

@@ -23,7 +23,7 @@ epsilon = 1e-8;
 [phi] = tensor_graph(x,knn);
 [L,A] = tensor_incidence(phi,false);
 
-gammas = maxgamma(L,A,phi,x,nu,epsilon);
+gammas = maxgamma(L,A,phi,x,nu,1);
 %%
 maxit = 10;
 knn = [10,10];
@@ -33,7 +33,7 @@ SR3.params.pcg_stop = false; %BUG?
 %Right now pcg_stop=true stops the algorithm after the first PCG iteration.
 % The intention was to stop when pcg hits some convergence setting.
 SR3.params.maxiter = maxit;
-SR3.params.verbose = true;
+SR3.params.verbose = false;
 SR3.params.epsilon = 1e-8;
 SR3.params.store_updates = false; %STORE THE WHOLE GAMMA PATH
 rho_log = {@log, @logprox}; 
@@ -43,7 +43,61 @@ SR3.solver.f = 'pcg_preconditioned';
 % IDENTITY
 SR3.gamma = gammas;
 SR3.nu = 1e-6;
-SR3.epsilon = 1e-8;
+SR3.epsilon = 1;
 
 [phi] = tensor_graph(x,knn);
-[SR3] = SR3_tensor(x, phi,SR3);
+%%
+[SR3] = SR3_tensor(x, phi,SR3,[gammas]);
+figure;imagesc(double(SR3.output.U  ))
+figure;imagesc(double(SR3.output.V{1, 1}    ))
+figure;imagesc(double(SR3.output.V{1, 2}    ))
+
+mc=(bsxfun(@times,~vecnorm(double(SR3.output.V{1, 2}),2,2),double(phi{2, 1})));
+Lc = mc'*mc;
+
+mr=(bsxfun(@times,~vecnorm(double(SR3.output.V{1, 1}),2,2),double(phi{1, 1})));
+Lr = mr'*mr;
+
+G_r = graph(Lr);
+cc_rows = conncomp(G_r);
+G_c = graph(Lc);
+cc_cols = conncomp(G_c);
+max(cc_cols)
+max(cc_rows)
+%%
+[SR3] = SR3_tensor(x, phi,SR3,[gammas(1) 0]);
+figure;imagesc(double(SR3.output.U  ))
+figure;imagesc(double(SR3.output.V{1, 1}    ))
+figure;imagesc(double(SR3.output.V{1, 2}    ))
+
+mc=(bsxfun(@times,~vecnorm(double(SR3.output.V{1, 2}),2,2),double(phi{2, 1})));
+Lc = mc'*mc;
+
+mr=(bsxfun(@times,~vecnorm(double(SR3.output.V{1, 1}),2,2),double(phi{1, 1})));
+Lr = mr'*mr;
+
+G_r = graph(Lr);
+cc_rows = conncomp(G_r);
+G_c = graph(Lc);
+cc_cols = conncomp(G_c);
+max(cc_cols)
+max(cc_rows)
+
+%%
+[SR3] = SR3_tensor(x, phi,SR3,[0 gammas(2)]);
+figure;imagesc(double(SR3.output.U  ))
+figure;imagesc(double(SR3.output.V{1, 1}    ))
+figure;imagesc(double(SR3.output.V{1, 2}    ))
+
+mc=(bsxfun(@times,~vecnorm(double(SR3.output.V{1, 2}),2,2),double(phi{2, 1})));
+Lc = mc'*mc;
+
+mr=(bsxfun(@times,~vecnorm(double(SR3.output.V{1, 1}),2,2),double(phi{1, 1})));
+Lr = mr'*mr;
+
+G_r = graph(Lr);
+cc_rows = conncomp(G_r);
+G_c = graph(Lc);
+cc_cols = conncomp(G_c);
+max(cc_cols)
+max(cc_rows)

@@ -1,12 +1,24 @@
 function [embedding_rows, embedding_cols, gammas_sr3, emd_inds,uk, vk ] = ...
-            gamma_traversal_single(x,x_orig,mask,gamma_init,knn,params)
-        
+    gamma_traversal_single(x,x_orig,mask,gamma_init,knn,params)
+
+if nargin < 1
+    dataset = 'lung500';
+    ppp = 0;
+    params.doPerm = false;
+    params.dataset = dataset;
+    params.oracleWeights = true;
+    params.nEigs = 4;
+    [x,x_orig,mask,~,~,gamma_vec,knn] = ...
+        missing_data_matrix(dataset,params,ppp);
+    gamma_init = gamma_vec(1);
+end
+
 [n_rows,n_cols,~] = size(x);
 
 %% SOME SR3 PARAMETERS
 maxit = 100;
 if length(knn) < ndims(x)
-knn = knn * ones(1,ndims(x));
+    knn = knn * ones(1,ndims(x));
 end
 
 SR3.params.tolF = 1e-6;
@@ -25,7 +37,7 @@ convexparams.min_mag = -3; % minimum magnitudes
 convexparams.max_mag = 2; % maximum magnitude.  You want this to be proportional to nu.
 %params for regular SR3
 % SR3.min_gamma = 1e-4;
-SR3.nu = 1e-6;
+SR3.nu = 1e-3;
 
 
 if params.oracleWeights
