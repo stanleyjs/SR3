@@ -38,6 +38,7 @@ convexparams.max_mag = 2; % maximum magnitude.  You want this to be proportional
 %params for regular SR3
 % SR3.min_gamma = 1e-4;
 SR3.nu = 1e-3;
+%SR3.nu = 1;
 
 
 if params.oracleWeights
@@ -171,21 +172,26 @@ for i = emd_inds'
         % use U to initialize x_tilde
         x_smooth = double(uk{i});
         % fill x_tilde with orig vals in non-missing entries
-        x_smooth(mask(:)) = x(mask(:));
-                
+         x_smooth(mask(:)) = x(mask(:));
+        
+        if 0 % don't plot
         figure;
-        subplot(131);imagesc(x_smooth);
+        subplot(131);imagesc(x_smooth,[-0.1 1.2]);
         %axis image;
         title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
         colorbar
+        colormap jet
         subplot(132);imagesc( double(uk{i}));
         %axis image;
         title(sprintf('n_r =%d, n_c=%d',nP_r(i) ,nP_c(i) ));
         colorbar
+        colormap jet
         subplot(133);imagesc(abs(x_smooth-x));
         colorbar
-
+        colormap jet
         drawnow
+        end
+
         row_dist  = row_dist + ...
             (gamma_c+gamma_r).^(alpha) * squareform(pdist(x_smooth,'euclidean'));
         col_dist =  col_dist + ...;
